@@ -1,6 +1,6 @@
 /* Cards: faces, backs, my-hand fan, opponent fans, trick pile */
 :root {
-  --cw: clamp(58px, min(9.2vw, 12.5vh), 108px);   /* my hand card width */
+  --cw: clamp(58px, min(9.2vw, 11.5vh), 104px);   /* my hand card width */
   --tcw: calc(var(--cw) * .86);                   /* trick card width */
   --ocw: clamp(26px, calc(var(--cw) * .44), 46px); /* opponent card width */
 }
@@ -39,13 +39,13 @@
 @keyframes flip { 0% { transform: rotateY(90deg); } 100% { transform: none; } }
 
 /* ---------- my hand ---------- */
-.hand-row { position: relative; display: flex; justify-content: center; align-items: flex-end; height: calc(var(--cw) * 1.4 + 26px); }
+.hand-row { position: relative; display: flex; justify-content: center; align-items: flex-end; height: calc(var(--cw) * 1.4 + 40px); }
 .hand {
   --spread: clamp(3.5deg, calc(40deg / max(var(--n, 8), 1)), 7deg);
   position: relative; width: calc(var(--cw) * 5); height: 100%;
 }
 .hand .card {
-  position: absolute; left: 50%; bottom: 0; margin-left: calc(var(--cw) / -2);
+  position: absolute; left: 50%; bottom: 16px; margin-left: calc(var(--cw) / -2);
   transform-origin: 50% 420%;
   --rot: calc((var(--i) - (var(--n) - 1) / 2) * var(--spread));
   --lift: 0px;
@@ -79,12 +79,7 @@
   transform: rotate(calc((var(--i) - (var(--n) - 1) / 2) * 7deg));
   transition: transform .3s var(--ease);
 }
-.fan-count {
-  position: absolute; right: -4px; top: -6px; z-index: 5;
-  min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px;
-  display: grid; place-items: center; font-size: .72rem; font-weight: 800;
-  background: rgba(5, 20, 16, .85); color: var(--ink); border: 1px solid var(--glass-line);
-}
+
 
 /* ---------- trick pile ---------- */
 .trick-card { position: absolute; left: 50%; top: 50%; --w: var(--tcw); z-index: 2; }

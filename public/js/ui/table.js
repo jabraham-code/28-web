@@ -263,7 +263,7 @@ export function mountTable(root, ctx) {
           <div class="avatar t${teamOf(seat)}${p?.ai === 'claude' ? ' claude' : ''}">${p?.isBot ? botIcon() : esc(initials(name))}<span class="ring" aria-hidden="true"></span></div>
           <div class="p-info">
             <div class="p-name">${esc(name)}${r.you.seat === seat ? ' <span class="you">(you)</span>' : ''}</div>
-            <div class="p-sub"><span class="tricks" title="Tricks won"><svg viewBox="0 0 16 16" class="ico" aria-hidden="true"><rect x="3" y="2" width="8" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="6" y="4" width="7" height="10" rx="1.5" fill="currentColor" opacity=".5"/></svg>${g.tricksWon?.[seat] ?? 0}</span>
+            <div class="p-sub">${r.you.seat === seat ? '' : `<span class="p-count" title="Cards in hand"><svg viewBox="0 0 16 16" class="ico" aria-hidden="true"><rect x="4" y="2" width="8" height="12" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>${g.handCounts?.[seat] ?? 0}</span>`}<span class="tricks" title="Tricks won"><svg viewBox="0 0 16 16" class="ico" aria-hidden="true"><rect x="3" y="2" width="8" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="6" y="4" width="7" height="10" rx="1.5" fill="currentColor" opacity=".5"/></svg>${g.tricksWon?.[seat] ?? 0}</span>
               ${botBadge(p)}${p && p.connected === false && !p.botControlled ? '<span class="tag tag-off">Offline</span>' : ''}${g.contract?.bidder === seat ? '<span class="tag tag-bidder">Bidder</span>' : ''}</div>
           </div>
           ${g.dealer === seat ? '<span class="dealer-chip" title="Dealer">D</span>' : ''}
@@ -302,10 +302,8 @@ export function mountTable(root, ctx) {
           b.addEventListener('animationend', () => b.classList.remove('deal-in'), { once: true });
         }
       });
-      let cnt = $('.fan-count', fan);
-      if (!cnt) { cnt = h('span', { class: 'fan-count' }); fan.append(cnt); }
-      cnt.textContent = n;
-      cnt.hidden = !n;
+      const cnt = $('.p-count', $('.plate', seatEls[pos]));
+      if (cnt) cnt.lastChild.textContent = n;
     }
   }
 

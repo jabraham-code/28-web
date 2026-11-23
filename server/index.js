@@ -48,7 +48,7 @@ export function createAppServer({ roomOptions = {} } = {}) {
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
-  const port = Number(process.env.PORT) || 3000;
+  const port = Number(process.env.PORT) || 2828;
   const { server, close, rooms } = createAppServer();
   server.listen(port, () => {
     console.log(`28 Online running at http://localhost:${port}`);

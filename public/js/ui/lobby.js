@@ -111,6 +111,15 @@ export function mountLobby(root, ctx) {
   });
 
   async function fillBots() {
+    // An unseated host almost always wants to play: take the first empty seat before bots fill the rest.
+    if (room.you.seat == null) {
+      const free = room.seats.findIndex((p) => !p);
+      if (free >= 0) {
+        const r = await ctx.call('sit', free);
+        if (r?.ok === false) return false;
+        room = { ...room, seats: room.seats.map((p, i) => (i === free ? { playerId: room.you.playerId } : p)), you: { ...room.you, seat: free } };
+      }
+    }
     for (let s = 0; s < 4; s++) {
       if (room.seats[s]) continue;
       const r = await ctx.call('addBot', s);
