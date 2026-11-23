@@ -24,6 +24,7 @@ export const DEFAULT_OPTIONS = Object.freeze({
   maxChatLength: 200,
   minTargetScore: 1,
   maxTargetScore: 52,
+  iceServers: undefined,  // WebRTC ICE servers for voice chat; default: Google STUN + optional TURN_* env
   llm: undefined,         // async (view, names) => {action, say}|null ; default: Claude when ANTHROPIC_API_KEY set
 });
 
@@ -39,6 +40,10 @@ const EVENTS = {
   'room:addBot': 'onAddBot',
   'room:kick': 'onKick',
   'room:settings': 'onSettings',
+  'voice:join': 'onVoiceJoin',
+  'voice:leave': 'onVoiceLeave',
+  'voice:mute': 'onVoiceMute',
+  'voice:signal': 'onVoiceSignal',
   'room:start': 'onStart',
   'game:action': 'onAction',
   'chat:send': 'onChat',
@@ -106,6 +111,7 @@ export class RoomManager {
     player.connId = null;
     player.conn = null;
     player.connected = false;
+    this._voiceDrop(room, player);
     this._startTakeoverTimer(room, player);
     this._afterChange(room);
   }
@@ -295,6 +301,75 @@ export class RoomManager {
     return ok();
   }
 
+  // --------------------------------------------------------------- voice chat
+  // WebRTC mesh: the server only relays signaling between players in the same
+  // room. The joiner sends offers to every peer already in voice.
+
+  onVoiceJoin(conn) {
+    const ctx = this._ctx(conn);
+    if (!ctx) return fail('Not in a room');
+    const { room, player } = ctx;
+    const peers = [...room.players.values()]
+      .filter((p) => p !== player && p.voice && p.conn)
+      .map((p) => p.playerId);
+    if (!player.voice && peers.length >= 7) return fail('Voice chat is full');
+    player.voice = true;
+    player.muted = false;
+    this._afterChange(room);
+    return ok({ peers, iceServers: this._iceServers() });
+  }
+
+  onVoiceLeave(conn) {
+    const ctx = this._ctx(conn);
+    if (!ctx) return ok();
+    this._voiceDrop(ctx.room, ctx.player);
+    this._afterChange(ctx.room);
+    return ok();
+  }
+
+  onVoiceMute(conn, { muted } = {}) {
+    const ctx = this._ctx(conn);
+    if (!ctx) return fail('Not in a room');
+    if (!ctx.player.voice) return fail('Not in voice chat');
+    ctx.player.muted = !!muted;
+    this._afterChange(ctx.room);
+    return ok();
+  }
+
+  onVoiceSignal(conn, { to, data } = {}) {
+    const ctx = this._ctx(conn);
+    if (!ctx) return fail('Not in a room');
+    const { room, player } = ctx;
+    if (!player.voice) return fail('Not in voice chat');
+    const target = typeof to === 'string' ? room.players.get(to) : null;
+    if (!target || !target.voice || !target.conn) return fail('Peer not in voice chat');
+    if (!data || typeof data !== 'object' || JSON.stringify(data).length > 12000) return fail('Invalid signal');
+    target.conn.emit('voice:signal', { from: player.playerId, data });
+    return ok();
+  }
+
+  _voiceDrop(room, player) {
+    if (!player.voice) return;
+    player.voice = false;
+    player.muted = false;
+    for (const p of room.players.values()) {
+      if (p !== player && p.voice && p.conn) p.conn.emit('voice:peer-left', { playerId: player.playerId });
+    }
+  }
+
+  _iceServers() {
+    if (this.opts.iceServers) return this.opts.iceServers;
+    const list = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }];
+    if (process.env.TURN_URL) {
+      list.push({
+        urls: process.env.TURN_URL.split(',').map((u) => u.trim()),
+        username: process.env.TURN_USERNAME || undefined,
+        credential: process.env.TURN_CREDENTIAL || undefined,
+      });
+    }
+    return list;
+  }
+
   // ------------------------------------------------------------------ helpers
 
   _newRoom() {
@@ -352,6 +427,7 @@ export class RoomManager {
   _bind(conn, room, player) {
     // Detach any older connection this player had (e.g. a second tab / stale socket).
     if (player.connId && player.connId !== conn.id) this.conns.delete(player.connId);
+    this._voiceDrop(room, player); // a new connection must re-join voice
     player.conn = conn;
     player.connId = conn.id;
     player.connected = true;
@@ -397,6 +473,7 @@ export class RoomManager {
   }
 
   _removePlayer(room, player) {
+    this._voiceDrop(room, player);
     if (player.takeoverTimer) clearTimeout(player.takeoverTimer);
     player.takeoverTimer = null;
     if (player.conn) this.conns.delete(player.connId);
@@ -494,7 +571,7 @@ export class RoomManager {
     if (pid === null) return null;
     const p = room.players.get(pid);
     if (!p) return null;
-    return { playerId: p.playerId, name: p.name, isBot: !!p.isBot, connected: !!p.connected, botControlled: !!p.botControlled, ai: (p.isBot || p.botControlled) ? this._brain(room) : null };
+    return { playerId: p.playerId, name: p.name, isBot: !!p.isBot, connected: !!p.connected, botControlled: !!p.botControlled, voice: !!p.voice, muted: !!p.muted, ai: (p.isBot || p.botControlled) ? this._brain(room) : null };
   }
 
   roomView(room, player) {
@@ -510,7 +587,7 @@ export class RoomManager {
       seats: room.seats.map((pid) => this._seatView(room, pid)),
       spectators: [...room.players.values()]
         .filter((p) => !p.isBot && p.seat === null)
-        .map((p) => ({ playerId: p.playerId, name: p.name, connected: !!p.connected })),
+        .map((p) => ({ playerId: p.playerId, name: p.name, connected: !!p.connected, voice: !!p.voice, muted: !!p.muted })),
       status: room.status,
       settings: { ...room.settings, claudeAvailable: !!this.llm },
       game: room.game ? getView(room.game, seat) : null,

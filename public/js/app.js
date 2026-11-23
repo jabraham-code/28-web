@@ -1,5 +1,7 @@
 // 28 Online — app shell: wires Net (SPEC §4) to the UI screens.
 import { Net } from './net.js';
+import { Voice } from './voice.js';
+import { mountVoice } from './ui/voice.js';
 import { $ } from './ui/util.js';
 import { installSuitSprite } from './ui/cards.js';
 import { toast } from './ui/toast.js';
@@ -42,6 +44,7 @@ const ctx = {
     const g = net?.state?.game;
     if (confirmFirst && g && !['matchEnd'].includes(g.phase) && net.state.you.seat != null &&
       !confirm('Leave this game? A bot will take over your seat after a while.')) return;
+    voice?.leave();
     await call('leave');
     toLanding();
   },
@@ -54,6 +57,9 @@ initChat({
 
 const lobby = mountLobby(screens.lobby, ctx);
 const table = mountTable(screens.game, ctx);
+const voice = net ? new Voice(net) : null;
+const voiceUI = voice ? mountVoice(voice, () => net.state) : null;
+if (voice && new URLSearchParams(location.search).has('debug')) window.__voice = voice; // dev/testing hook
 
 // ------------------------------------------------------------------ screens
 function show(name) {
@@ -214,6 +220,7 @@ $('#landing-rules').addEventListener('click', () => showRules());
 document.body.dataset.screen = 'landing';
 if (net) {
   net.on('state', render);
+  net.on('state', () => voiceUI?.update()); // after render so seat elements exist
   net.on('chat', (m) => {
     addMessage(m);
     if (m.bot && current === 'game') table.say(m.seat, m.text);

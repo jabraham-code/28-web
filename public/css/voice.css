@@ -1,0 +1,46 @@
+/* Voice chat controls + talking indicators */
+.voice-bar { position: relative; display: inline-flex; align-items: center; gap: 6px; }
+.voice-bar .v-join.busy { opacity: .6; cursor: progress; }
+.voice-bar .v-mute { color: var(--ok); border-color: rgba(111, 220, 164, .45); background: rgba(111, 220, 164, .12); }
+.voice-bar .v-mute.v-off { color: var(--bad); border-color: rgba(255, 122, 122, .45); background: rgba(255, 122, 122, .12); }
+.voice-bar .v-mute.v-live { box-shadow: 0 0 0 3px rgba(111, 220, 164, .35); }
+.voice-bar .v-count { background: var(--ok); color: #05261a; }
+
+.voice-pop {
+  position: absolute; top: calc(100% + 10px); right: 0; z-index: 60; width: min(290px, calc(100vw - 32px));
+  padding: 14px; border-radius: var(--radius-sm); border: 1px solid var(--glass-line); background: var(--glass-2);
+  box-shadow: var(--shadow); backdrop-filter: blur(14px); color: var(--ink); text-align: left;
+}
+.vp-head { display: flex; justify-content: space-between; align-items: baseline; font-weight: 700; margin-bottom: 10px; }
+.vp-head span { font-size: .78rem; font-weight: 500; color: var(--ink-3); }
+.vp-list { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 6px; }
+.vp-list li { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 10px; background: rgba(255, 255, 255, .04); transition: background .2s; }
+.vp-list li.talking { background: rgba(111, 220, 164, .16); }
+.vp-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ink-3); flex: none; }
+.vp-dot.t0 { background: var(--team0); }
+.vp-dot.t1 { background: var(--team1); }
+.vp-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .9rem; }
+.vp-name em { font-style: normal; color: var(--ink-3); font-size: .78rem; }
+.vp-name .vp-muted { color: var(--bad); }
+.vp-leave { width: 100%; }
+
+/* Seat indicators (game plates + lobby seats) */
+.plate.v-in::after, .lt-seat.v-in::after {
+  content: ''; position: absolute; width: 18px; height: 18px; border-radius: 50%; z-index: 3;
+  background: var(--ok) center / 11px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='9' y='3' width='6' height='11' rx='3' fill='%2305261a'/%3E%3Cpath d='M5 11a7 7 0 0 0 14 0M12 18v3' stroke='%2305261a' stroke-width='2.4' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .4);
+}
+.plate.v-in::after { left: -4px; bottom: -4px; }
+.lt-seat.v-in::after { right: 6px; bottom: 6px; }
+.plate.v-muted::after, .lt-seat.v-muted::after { background-color: var(--bad); }
+.plate.v-speaking { box-shadow: 0 0 0 2px var(--ok), 0 0 22px rgba(111, 220, 164, .55), 0 8px 20px rgba(0, 0, 0, .35) !important; }
+.lt-seat.v-speaking > * { box-shadow: 0 0 0 2px var(--ok), 0 0 22px rgba(111, 220, 164, .5); }
+@media (prefers-reduced-motion: no-preference) {
+  .plate.v-speaking::after, .lt-seat.v-speaking::after { animation: v-pulse .9s ease-in-out infinite; }
+}
+@keyframes v-pulse { 50% { transform: scale(1.18); } }
+
+@media (max-width: 560px) {
+  .voice-bar { gap: 4px; }
+  .voice-bar .icon-btn { width: 34px; height: 34px; }
+}
