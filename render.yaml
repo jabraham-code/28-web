@@ -1,0 +1,23 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+# Deploy: push this repo to GitHub, then in Render choose New → Blueprint and select the repo.
+services:
+  - type: web
+    name: twenty-eight
+    runtime: node
+    plan: free                 # free plan sleeps after 15 min idle; change to "starter" for always-on
+    region: oregon
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: ANTHROPIC_API_KEY  # optional: enables Claude AI bots; set in the Render dashboard
+        sync: false
+      - key: ANTHROPIC_MODEL
+        value: claude-haiku-5-5
+      - key: LLM_BOTS           # set to "off" to disable Claude bots server-wide
+        value: "on"
