@@ -44,6 +44,9 @@ test('Claude brain drives bots, chats, and the hand completes', async () => {
     return { action: o[0].action, say: calls === 1 ? 'Good luck all!' : '' };
   };
   const { m, host } = setup(llm);
+  assert.equal(host.states.at(-1).settings.botBrain, 'classic', 'classic bots by default');
+  assert.equal(host.states.at(-1).seats[1].ai, 'classic');
+  assert.ok(m.handle(host, 'room:settings', { botBrain: 'claude' }).ok);
   assert.equal(host.states.at(-1).settings.botBrain, 'claude');
   assert.equal(host.states.at(-1).settings.claudeAvailable, true);
   assert.equal(host.states.at(-1).seats[1].ai, 'claude');
@@ -59,6 +62,7 @@ test('failing / invalid Claude responses fall back to the classic bot', async ()
   let k = 0;
   const llm = async () => { k++; if (k % 2) throw new Error('boom'); return { action: { type: 'play', card: 'XX' }, say: '' }; };
   const { m, host } = setup(llm);
+  assert.ok(m.handle(host, 'room:settings', { botBrain: 'claude' }).ok);
   m.handle(host, 'room:start', {});
   const stop = autoplayHost(m, host);
   await waitFor(() => host.states.at(-1).game?.phase === 'handEnd' || host.states.at(-1).game?.handNumber > 1);

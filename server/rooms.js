@@ -462,7 +462,7 @@ export class RoomManager {
       players: new Map(), // playerId -> player (humans + bots)
       seats: [null, null, null, null], // playerId | null
       status: 'lobby',
-      settings: { targetScore: 6, botBrain: this.llm ? 'claude' : 'classic', turnTimer: 45, hints: true },
+      settings: { targetScore: 6, botBrain: 'classic', turnTimer: 45, hints: true },
       history: { hands: [], matches: [], series: [0, 0] },
       game: null,
       botTimer: null,

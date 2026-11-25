@@ -391,7 +391,7 @@ function doPlay(game, seat, card) {
   hand.splice(hand.indexOf(card), 1);
   const led = ledSuit(game);
   const discard = led !== null && suitOf(card) !== led;
-  const faceDown = discard && !game.trump.revealed;
+  const faceDown = false; // house rule: discards are always played face up
   game.trick.cards.push({ seat, card, faceDown, discard, afterReveal: game.trump.revealed });
   game.mustPlayTrump = null;
   log(game, faceDown ? `Seat ${seat} played a card face down` : `Seat ${seat} played ${card}`);

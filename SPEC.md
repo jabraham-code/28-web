@@ -40,14 +40,14 @@ Do not edit files you don't own. If a contract seems wrong, follow it anyway and
 ### Play (`phase: "playing"`) — 8 tricks
 - `firstSeat` leads trick 1; trick winner leads next. Must follow suit if able.
 - **Phase one (trump concealed):**
-  - A player (not bidder) unable to follow may either play any card (a discard — it is shown face-down to others while the trick is in progress) or first take action `callTrump`: concealed card is revealed and moved into bidder's hand; trump is now revealed; the caller must then play a trump if they have one, otherwise any card.
+  - A player (not bidder) unable to follow may either play any card (a discard — played face up, house rule; it does not reveal trump) or first take action `callTrump`: concealed card is revealed and moved into bidder's hand; trump is now revealed; the caller must then play a trump if they have one, otherwise any card.
   - Bidder unable to follow a non-trump lead: may discard any **non-trump** card from hand, or `playTrumpCard` (reveal and play the concealed card, trump becomes revealed). Bidder may NOT play a trump-suit card from hand in this case. (If bidder's hand has only trump-suit cards, they may play one from hand as a plain discard.)
   - Bidder leading: may not lead a trump-suit card unless hand holds only trump-suit cards (then it is led with no trump power, trump stays concealed). If bidder's hand is empty (trick 8, concealed card unplayed), bidder must `playTrumpCard`.
   - When trump suit is led by someone else, bidder follows from hand if possible; if bidder has no trump-suit cards in hand they may play anything; they may also `playTrumpCard`.
   - Trick winner in phase one: highest card of suit led.
 - **Phase two (trump revealed):** follow suit if able; otherwise any card. Bidder has no restrictions.
 - **Trick winner when trump revealed during or before this trick:** a card has trump power iff its suit == trump AND (it was played after the reveal, OR it was a non-following discard). Trump-suit cards that followed a trump lead before the reveal have no trump power. Highest trump-power card wins; else highest card of suit led.
-- Phase-one face-down discards become visible to all when the trick completes (or immediately on trump reveal).
+- Discards are always played face up (house rule; pagat plays them face down until the trick ends).
 
 ### Scoring
 - Bidding team needs card points ≥ bid.
@@ -185,7 +185,7 @@ Share link format: `${location.origin}/?room=ABCD`. The UI reads the `room` quer
 
 - **Fill with bots:** host adds bots per empty seat (`room:addBot`); UI offers "Fill empty seats with bots" and "Start with N bots".
 - **Claude AI bots** (`server/llmBot.js`): enabled when the server has `ANTHROPIC_API_KEY` (opt out with `LLM_BOTS=off`). Env: `ANTHROPIC_MODEL` (default `claude-haiku-5-5`), `LLM_BOT_EFFORT` (default `low`), `LLM_BOT_TIMEOUT_MS` (default 25000). Every Claude choice is picked from a numbered list built from `view.legal`; on error/timeout/refusal/invalid choice the classic heuristic bot moves instead.
-  - `RoomView.settings` gains `claudeAvailable: bool`, `botBrain: "claude"|"classic"` (host: `room:settings { botBrain }`, allowed any time).
+  - `RoomView.settings` gains `claudeAvailable: bool`, `botBrain: "claude"|"classic"` (default `"classic"`; host: `room:settings { botBrain }`, allowed any time).
   - Seat entries gain `ai: "claude"|"classic"|null`.
   - `chat:message` may carry `bot: true` (Claude table talk).
 - **Turn timer:** `settings.turnTimer` ∈ {0,20,30,45,60} seconds (default 45). `RoomView.turnClock = { seat, endsIn, total } | null` (ms). On expiry, the classic bot plays for the human, and a `chat:message` with `system: true` is posted.

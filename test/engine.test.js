@@ -283,25 +283,24 @@ test('callTrump: caller must play trump if held; trump power wins', () => {
   assert.equal(currentTurn(game), 1);
 });
 
-test('concealed trump: bidder void cannot trump from hand; face-down discards; playTrumpCard', () => {
+test('concealed trump: bidder void cannot trump from hand; face-up discards; playTrumpCard', () => {
   const game = scenarioGame(0); // first seat 1
   assert.equal(currentTurn(game), 1);
   act(game, 1, { type: 'play', card: 'JD' });
   act(game, 2, { type: 'play', card: '7D' });
-  // seat 3 void in D: discard face down
+  // seat 3 void in D: discard is played face up (house rule)
   act(game, 3, { type: 'play', card: '7S' });
-  assert.equal(game.trick.cards[2].faceDown, true);
-  assert.equal(getView(game, 2).trick.cards[2].card, null);
-  assert.equal(getView(game, null).trick.cards[2].card, null);
+  assert.equal(game.trick.cards[2].faceDown, false);
+  assert.equal(getView(game, 2).trick.cards[2].card, '7S');
+  assert.equal(getView(game, null).trick.cards[2].card, '7S');
   assert.equal(getView(game, 3).trick.cards[2].card, '7S');
-  assert.ok(!JSON.stringify(getView(game, 0)).includes('"7S"'));
   const v0 = getView(game, 0);
   assert.deepEqual(v0.legal.playable, ['JS', '9S', 'AS', 'TS']);
   assert.ok(v0.legal.actions.includes('playTrumpCard'));
   assert.ok(!v0.legal.actions.includes('callTrump'));
   reject(game, 0, { type: 'play', card: 'KH' }, /may not trump from hand/);
   act(game, 0, { type: 'playTrumpCard' });
-  // reveal makes face-down cards visible; 7H has trump power
+  // 7H has trump power
   assert.equal(game.lastTrick.winner, 0);
   assert.deepEqual(game.lastTrick.cards.map((e) => e.card), ['JD', '7D', '7S', '7H']);
   assert.equal(game.trump.revealed, true);
@@ -312,12 +311,13 @@ test('concealed trump: bidder void cannot trump from hand; face-down discards; p
   assert.ok(getView(game, 0).legal.playable.includes('KH'));
 });
 
-test('face-down card becomes visible immediately on reveal mid-trick', () => {
+test('discards are visible to everyone immediately (face-up house rule)', () => {
   const game = scenarioGame(0);
   act(game, 1, { type: 'play', card: 'JD' });
   act(game, 2, { type: 'play', card: '7D' });
   act(game, 3, { type: 'play', card: '7S' });
-  assert.equal(getView(game, 1).trick.cards[2].card, null);
+  assert.equal(getView(game, 1).trick.cards[2].card, '7S');
+  assert.equal(game.trump.revealed, false, 'a face-up discard does not reveal trump');
   act(game, 0, { type: 'playTrumpCard' });
   // trick done -> lastTrick visible to all
   assert.equal(getView(game, 1).lastTrick.cards[2].card, '7S');
@@ -328,7 +328,7 @@ test('trump led by another: bidder follows from hand or may playTrumpCard', () =
   // manipulate: seat 1 leads 9H
   game.trick.cards = [];
   act(game, 1, { type: 'play', card: '9H' });
-  act(game, 2, { type: 'play', card: '7C' }); // void in H, discard face down
+  act(game, 2, { type: 'play', card: '7C' }); // void in H, discard (face up)
   act(game, 3, { type: 'play', card: 'AH' });
   const v = getView(game, 0);
   assert.deepEqual(v.legal.playable, ['KH', 'QH', '8H']);

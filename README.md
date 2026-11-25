@@ -15,7 +15,7 @@ Rules follow the main game on [pagat.com/jass/28](https://www.pagat.com/jass/28.
   - automatic redeal when one hand holds all four Jacks;
   - match scoring of +1/−2, +2/−3 and +3/−4 depending on the bid.
 - **Bots:** the host can add a bot to any empty seat or fill all of them at once. A bot also plays for anyone disconnected for 60 s and hands the seat back when they return.
-- **Claude AI bots** (optional): Claude makes the bots' decisions when `ANTHROPIC_API_KEY` is set, using Haiku by default. If a call fails, the classic bot moves instead. The host can switch between Claude and Classic bots at any time.
+- **Claude AI bots** (optional): Claude makes the bots' decisions when `ANTHROPIC_API_KEY` is set, using Haiku by default. If a call fails, the classic bot moves instead. Bots start as Classic; the host can switch to Claude bots in the lobby or during the game.
 - **Voice chat:** players talk to each other directly over WebRTC. There is mute, per-person silence, and a talking indicator on each seat.
 - **Turn timer:** the host picks Off, 20, 30, 45 or 60 s per move. When time runs out, a bot plays the move. A countdown shows on your turn, with ticks and a vibration as time runs low.
 - **Hints:** ask for a suggested move once per turn. Claude explains its suggestion when a key is set; otherwise the classic bot suggests one. The suggested card or button is highlighted. The host can turn hints off.

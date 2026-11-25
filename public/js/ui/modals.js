@@ -78,7 +78,7 @@ export function showRules() {
     </section>
     <section>
       <h3>Playing</h3>
-      <p>8 tricks. Follow suit if you can. While trump is hidden, a player who can&rsquo;t follow may discard face-down, or <b>call trump</b>: the hidden card is revealed and must then be followed with a trump if possible.</p>
+      <p>8 tricks. Follow suit if you can. While trump is hidden, a player who can&rsquo;t follow may discard any card (face up), or <b>call trump</b>: the hidden card is revealed and must then be followed with a trump if possible.</p>
       <p>The bidder can&rsquo;t ruff from hand while trump is hidden &mdash; instead they may <b>play the concealed trump card</b> itself, revealing trump. Once trump is revealed, normal trick-taking with trumps applies.</p>
     </section>
     <section>
