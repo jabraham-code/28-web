@@ -98,21 +98,23 @@ function describe(view, names) {
   return lines.join('\n');
 }
 
-/**
- * Ask Claude for a move. Resolves to { action, say } or null (caller falls back).
- * @param {object} view GameView for the bot's seat
- * @param {string[]} names display names by seat
- */
-export async function chooseActionLLM(view, names = []) {
-  const opts = legalOptions(view);
-  if (opts.length === 0) return null;
-  if (opts.length === 1) return { action: opts[0].action, say: '' };
+const HINT_SCHEMA = {
+  type: 'object',
+  properties: {
+    choice: { type: 'integer', description: 'Number of the recommended legal option' },
+    reason: { type: 'string', description: 'One short sentence (max 20 words) explaining why' },
+  },
+  required: ['choice', 'reason'],
+  additionalProperties: false,
+};
 
-  const prompt = `${describe(view, names)}\n\nLEGAL OPTIONS:\n${opts.map((o, i) => `${i + 1}. ${o.label}`).join('\n')}\n\nChoose one option number.`;
+async function ask(view, names, { schema, instruction }) {
+  const opts = legalOptions(view);
+  const prompt = `${describe(view, names)}\n\nLEGAL OPTIONS:\n${opts.map((o, i) => `${i + 1}. ${o.label}`).join('\n')}\n\n${instruction}`;
   const res = await getClient().messages.create({
     model: MODEL,
     max_tokens: 4000,
-    output_config: { effort: EFFORT, format: { type: 'json_schema', schema: SCHEMA } },
+    output_config: { effort: EFFORT, format: { type: 'json_schema', schema } },
     system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }],
     messages: [{ role: 'user', content: prompt }],
   });
@@ -123,6 +125,37 @@ export async function chooseActionLLM(view, names = []) {
   try { parsed = JSON.parse(text); } catch { return null; }
   const idx = Number(parsed.choice) - 1;
   if (!Number.isInteger(idx) || idx < 0 || idx >= opts.length) return null;
-  const say = typeof parsed.say === 'string' ? parsed.say.trim().slice(0, 80) : '';
-  return { action: opts[idx].action, say };
+  return { option: opts[idx], parsed };
+}
+
+/**
+ * Ask Claude for a move. Resolves to { action, say } or null (caller falls back).
+ * @param {object} view GameView for the bot's seat
+ * @param {string[]} names display names by seat
+ */
+export async function chooseActionLLM(view, names = []) {
+  const opts = legalOptions(view);
+  if (opts.length === 0) return null;
+  if (opts.length === 1) return { action: opts[0].action, say: '' };
+  const r = await ask(view, names, { schema: SCHEMA, instruction: 'Choose one option number.' });
+  if (!r) return null;
+  const say = typeof r.parsed.say === 'string' ? r.parsed.say.trim().slice(0, 80) : '';
+  return { action: r.option.action, say };
+}
+
+/**
+ * Coach a human player: recommend one legal option with a short reason.
+ * Resolves to { action, reason } or null.
+ */
+export async function hintLLM(view, names = []) {
+  const opts = legalOptions(view);
+  if (opts.length === 0) return null;
+  if (opts.length === 1) return { action: opts[0].action, reason: 'This is your only legal move.' };
+  const r = await ask(view, names, {
+    schema: HINT_SCHEMA,
+    instruction: 'You are coaching this player (they are "You"). Recommend the best option number and explain why in one short, friendly sentence (max 20 words). Never mention hidden information you could not know.',
+  });
+  if (!r) return null;
+  const reason = typeof r.parsed.reason === 'string' ? r.parsed.reason.trim().slice(0, 160) : '';
+  return { action: r.option.action, reason };
 }

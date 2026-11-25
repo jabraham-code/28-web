@@ -47,6 +47,7 @@ export class Net {
       this._emit('state', view);
     });
     this.socket.on('chat:message', (msg) => this._emit('chat', msg));
+    this.socket.on('room:reaction', (r) => this._emit('reaction', r));
   }
 
   on(event, fn) {
@@ -65,9 +66,9 @@ export class Net {
     }
   }
 
-  _request(event, payload = {}) {
+  _request(event, payload = {}, timeout = REQUEST_TIMEOUT) {
     return new Promise((resolve) => {
-      this.socket.timeout(REQUEST_TIMEOUT).emit(event, payload, (err, res) => {
+      this.socket.timeout(timeout).emit(event, payload, (err, res) => {
         if (err) resolve({ ok: false, error: 'Request timed out', timeout: true });
         else resolve(res ?? { ok: false, error: 'No response' });
       });
@@ -131,4 +132,6 @@ export class Net {
   start() { return this._request('room:start', {}); }
   action(actionObj) { return this._request('game:action', actionObj ?? {}); }
   chat(text) { return this._request('chat:send', { text }); }
+  hint() { return this._request('game:hint', {}, 40000); } // Claude may take a while
+  react(emoji) { return this._request('room:react', { emoji }); }
 }

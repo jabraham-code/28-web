@@ -31,7 +31,10 @@ export function createAppServer({ roomOptions = {} } = {}) {
       socket.on(event, (payload, ack) => {
         if (typeof payload === 'function') { ack = payload; payload = {}; }
         const res = rooms.handle(socket, event, payload);
-        if (typeof ack === 'function') ack(res);
+        // Most handlers answer synchronously; some (e.g. game:hint) return a promise.
+        Promise.resolve(res)
+          .catch(() => ({ ok: false, error: 'Internal server error' }))
+          .then((r) => { if (typeof ack === 'function') ack(r); });
       });
     }
     socket.on('disconnect', () => rooms.disconnect(socket));

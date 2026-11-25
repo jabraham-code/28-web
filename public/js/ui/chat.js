@@ -36,6 +36,7 @@ export function mountChat(container, { isVisible = () => true, compact = false }
 function msgEl(m) {
   const t = m.seat != null ? `t${teamOf(m.seat)}-text` : 'spec-text';
   const time = new Date(m.ts || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (m.system) return h('li', { class: 'chat-msg chat-system', html: `<span class="chat-text">${esc(m.text)}</span><time>${time}</time>` });
   return h('li', { class: `chat-msg${m.bot ? ' from-bot' : ''}`, html: `<span class="chat-name ${t}">${esc(m.name)}${m.bot ? ' <span class="tag tag-claude">AI</span>' : ''}</span><span class="chat-text">${esc(m.text)}</span><time>${time}</time>` });
 }
 

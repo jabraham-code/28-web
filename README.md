@@ -17,6 +17,11 @@ Rules follow the main game on [pagat.com/jass/28](https://www.pagat.com/jass/28.
 - **Bots:** the host can add a bot to any empty seat or fill all of them at once. A bot also plays for anyone disconnected for 60 s and hands the seat back when they return.
 - **Claude AI bots** (optional): Claude makes the bots' decisions when `ANTHROPIC_API_KEY` is set, using Haiku by default. If a call fails, the classic bot moves instead. The host can switch between Claude and Classic bots at any time.
 - **Voice chat:** players talk to each other directly over WebRTC. There is mute, per-person silence, and a talking indicator on each seat.
+- **Turn timer:** the host picks Off, 20, 30, 45 or 60 s per move. When time runs out, a bot plays the move. A countdown shows on your turn, with ticks and a vibration as time runs low.
+- **Hints:** ask for a suggested move once per turn. Claude explains its suggestion when a key is set; otherwise the classic bot suggests one. The suggested card or button is highlighted. The host can turn hints off.
+- **Emoji reactions:** 👍 😂 😮 😡 🔥 👏 🙏 😢 float up from your seat.
+- **Scoreboard and rematch:** shows every hand (bidder, bid, trump, points, result) and a running series of matches won. **Rematch** starts the next match and keeps the series.
+- **Sound and vibration:** card, deal, trick, trump-reveal, your-turn and win/lose sounds are generated in the browser, with vibration on supported phones. Toggle them in the ⋯ menu.
 - **Modern UI:**
   - dealing, playing and trick animations;
   - works on desktop and phone;

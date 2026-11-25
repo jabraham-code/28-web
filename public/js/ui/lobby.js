@@ -50,6 +50,19 @@ export function mountLobby(root, ctx) {
             </div>
             <p class="brain-hint muted"></p>
           </div>
+          <div class="setting timer-setting">
+            <span class="eyebrow" id="timer-label">Turn timer</span>
+            <div class="segmented" role="radiogroup" aria-labelledby="timer-label">
+              ${[0, 20, 30, 45, 60].map((t) => `<button type="button" role="radio" class="seg" data-timer="${t}">${t ? `${t}s` : 'Off'}</button>`).join('')}
+            </div>
+          </div>
+          <div class="setting hints-setting">
+            <span class="eyebrow" id="hints-label">Hints</span>
+            <div class="segmented" role="radiogroup" aria-labelledby="hints-label">
+              <button type="button" role="radio" class="seg" data-hints="on">💡 On</button>
+              <button type="button" role="radio" class="seg" data-hints="off">Off</button>
+            </div>
+          </div>
           <div class="lobby-buttons">
             <button class="btn btn-outline-gold" type="button" data-act="fill"><svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><rect x="5" y="8" width="14" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="9.5" cy="13.5" r="1.5" fill="currentColor"/><circle cx="14.5" cy="13.5" r="1.5" fill="currentColor"/><path d="M12 4v4" stroke="currentColor" stroke-width="2"/></svg><span>Fill empty seats with bots</span></button>
             <button class="btn btn-gold btn-lg" type="button" data-act="start">Start game</button>
@@ -82,6 +95,8 @@ export function mountLobby(root, ctx) {
     const act = b.dataset.act;
     if (b.dataset.target) return ctx.call('setSettings', { targetScore: Number(b.dataset.target) });
     if (b.dataset.brain) return ctx.call('setSettings', { botBrain: b.dataset.brain });
+    if (b.dataset.timer) return ctx.call('setSettings', { turnTimer: Number(b.dataset.timer) });
+    if (b.dataset.hints) return ctx.call('setSettings', { hints: b.dataset.hints === 'on' });
     if (act === 'copy') {
       try {
         await navigator.clipboard.writeText(link());
@@ -172,7 +187,15 @@ export function mountLobby(root, ctx) {
     }
     const filled = r.seats.filter(Boolean).length;
     const host = r.you.isHost;
-    root.querySelectorAll('.seg').forEach((b) => {
+    const segOn = (sel, test) => root.querySelectorAll(sel).forEach((b) => {
+      const on = test(b);
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-checked', String(on));
+      b.disabled = !host;
+    });
+    segOn('.seg[data-timer]', (b) => Number(b.dataset.timer) === (r.settings.turnTimer ?? 0));
+    segOn('.seg[data-hints]', (b) => (b.dataset.hints === 'on') === !!r.settings.hints);
+    root.querySelectorAll('.seg[data-target]').forEach((b) => {
       const on = Number(b.dataset.target) === r.settings.targetScore;
       b.classList.toggle('on', on);
       b.setAttribute('aria-checked', String(on));

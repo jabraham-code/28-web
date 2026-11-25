@@ -1,6 +1,7 @@
 // 28 Online — app shell: wires Net (SPEC §4) to the UI screens.
 import { Net } from './net.js';
 import { Voice } from './voice.js';
+import { Sounds } from './sounds.js';
 import { mountVoice } from './ui/voice.js';
 import { $ } from './ui/util.js';
 import { installSuitSprite } from './ui/cards.js';
@@ -8,7 +9,7 @@ import { toast } from './ui/toast.js';
 import { mountLobby } from './ui/lobby.js';
 import { mountTable } from './ui/table.js';
 import { initChat, addMessage, clearChat, markRead } from './ui/chat.js';
-import { showRules, showHandEnd, hideHandEnd, showMatchEnd, hideMatchEnd, isOpen } from './ui/modals.js';
+import { showRules, showHandEnd, hideHandEnd, showMatchEnd, hideMatchEnd, isOpen, showScoreboard } from './ui/modals.js';
 
 installSuitSprite();
 
@@ -35,8 +36,14 @@ async function call(method, ...args) {
   return res;
 }
 
+const sounds = new Sounds();
+
 const ctx = {
   call,
+  sounds,
+  hint: () => call('hint'),
+  react: (emoji) => call('react', emoji),
+  scoreboard: () => showScoreboard(net?.state),
   act: (action) => call('action', action),
   start: () => call('start'),
   rules: () => showRules(),
@@ -221,6 +228,12 @@ document.body.dataset.screen = 'landing';
 if (net) {
   net.on('state', render);
   net.on('state', () => voiceUI?.update()); // after render so seat elements exist
+  net.on('state', (r) => sounds.update(r));
+  net.on('reaction', (x) => {
+    if (current !== 'game') return;
+    table.react(x.seat, x.emoji, x.name);
+    sounds.play('pop');
+  });
   net.on('chat', (m) => {
     addMessage(m);
     if (m.bot && current === 'game') table.say(m.seat, m.text);

@@ -10,7 +10,7 @@
 import crypto from 'node:crypto';
 import { createGame, applyAction, getView, currentTurn } from './engine.js';
 import { chooseAction } from './bot.js';
-import { chooseActionLLM, llmAvailable } from './llmBot.js';
+import { chooseActionLLM, hintLLM, legalOptions, llmAvailable } from './llmBot.js';
 
 export const DEFAULT_OPTIONS = Object.freeze({
   botDelay: 800,          // ms before a bot acts once it's their turn
@@ -25,8 +25,13 @@ export const DEFAULT_OPTIONS = Object.freeze({
   minTargetScore: 1,
   maxTargetScore: 52,
   iceServers: undefined,  // WebRTC ICE servers for voice chat; default: Google STUN + optional TURN_* env
+  hint: undefined,        // async (view, names) => {action, reason}|null ; default: Claude when available
+  turnTimers: [0, 20, 30, 45, 60], // allowed turn timer settings (seconds, 0 = off)
+  turnTimerUnit: 1000,    // ms per turn-timer second (tests shrink this)
   llm: undefined,         // async (view, names) => {action, say}|null ; default: Claude when ANTHROPIC_API_KEY set
 });
+
+export const REACTIONS = Object.freeze(['👍', '😂', '😮', '😡', '🔥', '👏', '🙏', '😢']);
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // no I / O
 const BOT_NAMES = ['Bot Arjun', 'Bot Meera', 'Bot Ravi', 'Bot Lakshmi', 'Bot Vijay', 'Bot Anita', 'Bot Suresh', 'Bot Divya'];
@@ -40,6 +45,8 @@ const EVENTS = {
   'room:addBot': 'onAddBot',
   'room:kick': 'onKick',
   'room:settings': 'onSettings',
+  'game:hint': 'onHint',
+  'room:react': 'onReact',
   'voice:join': 'onVoiceJoin',
   'voice:leave': 'onVoiceLeave',
   'voice:mute': 'onVoiceMute',
@@ -78,6 +85,7 @@ export class RoomManager {
     this.opts = { ...DEFAULT_OPTIONS, ...options };
     // Claude bots: injected brain (tests) or the real one when a key is configured.
     this.llm = options.llm !== undefined ? options.llm : (llmAvailable() ? chooseActionLLM : null);
+    this.hinter = options.hint !== undefined ? options.hint : (llmAvailable() ? hintLLM : null);
     this.logger = options.logger ?? console;
     this.rooms = new Map(); // code -> room
     this.conns = new Map(); // conn.id -> { conn, code, playerId }
@@ -235,23 +243,33 @@ export class RoomManager {
     return ok();
   }
 
-  onSettings(conn, { targetScore, botBrain } = {}) {
+  onSettings(conn, { targetScore, botBrain, turnTimer, hints } = {}) {
     const ctx = this._hostCtx(conn);
     if (ctx.error) return fail(ctx.error);
     const { room } = ctx;
+    // Validate everything first, then apply atomically.
     if (botBrain !== undefined) {
-      // Bot brain may be switched any time (takes effect on the next bot move).
       if (botBrain !== 'claude' && botBrain !== 'classic') return fail('Invalid bot type');
       if (botBrain === 'claude' && !this.llm) return fail('Claude bots need ANTHROPIC_API_KEY on the server');
-      room.settings.botBrain = botBrain;
-      if (targetScore === undefined) { this._afterChange(room); return ok(); }
     }
-    if (!this._isLobby(room)) return fail('Game in progress');
-    const t = Number(targetScore);
-    if (!Number.isInteger(t) || t < this.opts.minTargetScore || t > this.opts.maxTargetScore) {
-      return fail(`Target score must be ${this.opts.minTargetScore}–${this.opts.maxTargetScore}`);
+    if (turnTimer !== undefined && !this.opts.turnTimers.includes(Number(turnTimer))) return fail('Invalid turn timer');
+    if (hints !== undefined && typeof hints !== 'boolean') return fail('Invalid hints setting');
+    let t;
+    if (targetScore !== undefined) {
+      // Target score changes the match itself, so lobby only. The rest may change any time.
+      if (!this._isLobby(room)) return fail('Game in progress');
+      t = Number(targetScore);
+      if (!Number.isInteger(t) || t < this.opts.minTargetScore || t > this.opts.maxTargetScore) {
+        return fail(`Target score must be ${this.opts.minTargetScore}–${this.opts.maxTargetScore}`);
+      }
     }
-    room.settings.targetScore = t;
+    if (botBrain !== undefined) room.settings.botBrain = botBrain;
+    if (turnTimer !== undefined) {
+      room.settings.turnTimer = Number(turnTimer);
+      this._clearGameTimers(room); // re-arm the current turn with the new limit
+    }
+    if (hints !== undefined) room.settings.hints = hints;
+    if (t !== undefined) room.settings.targetScore = t;
     this._afterChange(room);
     return ok();
   }
@@ -265,6 +283,8 @@ export class RoomManager {
     this._clearGameTimers(room);
     room.game = createGame({ targetScore: room.settings.targetScore });
     room.status = 'playing';
+    room.history.hands = [];
+    room.recordedKey = null;
     room.trickKey = this._trickKey(room.game);
     room.pauseUntil = 0;
     this._afterChange(room);
@@ -299,6 +319,65 @@ export class RoomManager {
     const out = { name: player.name, seat: player.seat, text: msg, ts: now };
     for (const p of room.players.values()) if (p.conn) p.conn.emit('chat:message', out);
     return ok();
+  }
+
+  // ----------------------------------------------------------- hints & reactions
+
+  /** Suggest a move for the asking player (one hint per turn). May resolve asynchronously. */
+  onHint(conn) {
+    const ctx = this._ctx(conn);
+    if (!ctx) return fail('Not in a room');
+    const { room, player } = ctx;
+    if (!room.settings.hints) return fail('Hints are turned off for this room');
+    if (room.status !== 'playing' || !room.game || player.seat === null) return fail('No game to give hints for');
+    const game = room.game;
+    if (currentTurn(game) !== player.seat) return fail("It's not your turn");
+    const view = getView(game, player.seat);
+    const opts = legalOptions(view);
+    if (!opts.length) return fail('Nothing to decide right now');
+    if (player.hintSeq === view.seq) return fail('You already got a hint for this move');
+    player.hintSeq = view.seq;
+    const describe = (action, reason, source) => {
+      const o = opts.find((x) => JSON.stringify(x.action) === JSON.stringify(action));
+      return ok({ action, label: o ? o.label : action.type, reason, source });
+    };
+    const classic = () => {
+      let a = null;
+      try { a = chooseAction(view); } catch { /* fall through */ }
+      if (!a || !opts.some((x) => JSON.stringify(x.action) === JSON.stringify(a))) a = opts[0].action;
+      return describe(a, 'Suggested by the classic bot.', 'classic');
+    };
+    if (!this.hinter) return classic();
+    const names = room.seats.map((pid) => room.players.get(pid)?.name);
+    return Promise.resolve()
+      .then(() => this.hinter(view, names))
+      .then((res) => {
+        if (!res?.action || !opts.some((x) => JSON.stringify(x.action) === JSON.stringify(res.action))) return classic();
+        return describe(res.action, res.reason || '', 'claude');
+      })
+      .catch((err) => {
+        this.logger.warn?.(`[rooms] Claude hint failed: ${err?.message || err}`);
+        return classic();
+      });
+  }
+
+  onReact(conn, { emoji } = {}) {
+    const ctx = this._ctx(conn);
+    if (!ctx) return fail('Not in a room');
+    const { room, player } = ctx;
+    if (!REACTIONS.includes(emoji)) return fail('Unknown reaction');
+    const now = Date.now();
+    player.reactTimes = player.reactTimes.filter((t) => now - t < 4000);
+    if (player.reactTimes.length >= 4) return fail('Slow down a little');
+    player.reactTimes.push(now);
+    const out = { playerId: player.playerId, seat: player.seat, name: player.name, emoji, ts: now };
+    for (const p of room.players.values()) if (p.conn) p.conn.emit('room:reaction', out);
+    return ok();
+  }
+
+  _systemChat(room, text) {
+    const out = { name: 'Table', seat: null, text, ts: Date.now(), system: true };
+    for (const p of room.players.values()) if (p.conn) p.conn.emit('chat:message', out);
   }
 
   // --------------------------------------------------------------- voice chat
@@ -383,7 +462,8 @@ export class RoomManager {
       players: new Map(), // playerId -> player (humans + bots)
       seats: [null, null, null, null], // playerId | null
       status: 'lobby',
-      settings: { targetScore: 6, botBrain: this.llm ? 'claude' : 'classic' },
+      settings: { targetScore: 6, botBrain: this.llm ? 'claude' : 'classic', turnTimer: 45, hints: true },
+      history: { hands: [], matches: [], series: [0, 0] },
       game: null,
       botTimer: null,
       nextHandTimer: null,
@@ -410,6 +490,8 @@ export class RoomManager {
       botControlled: false,
       takeoverTimer: null,
       chatTimes: [],
+      reactTimes: [],
+      hintSeq: -1,
     };
     room.players.set(player.playerId, player);
     return player;
@@ -529,9 +611,9 @@ export class RoomManager {
       this._destroyRoom(room);
       return;
     }
-    this._broadcast(room);
     this._updateCleanup(room);
-    this._schedule(room);
+    this._schedule(room); // before broadcasting so the view carries the new turn clock
+    this._broadcast(room);
   }
 
   _updateCleanup(room) {
@@ -551,6 +633,7 @@ export class RoomManager {
     room.botTimer = null;
     room.nextHandTimer = null;
     room.timerKey = null;
+    room.turnClock = null;
   }
 
   _destroyRoom(room) {
@@ -589,7 +672,11 @@ export class RoomManager {
         .filter((p) => !p.isBot && p.seat === null)
         .map((p) => ({ playerId: p.playerId, name: p.name, connected: !!p.connected, voice: !!p.voice, muted: !!p.muted })),
       status: room.status,
-      settings: { ...room.settings, claudeAvailable: !!this.llm },
+      settings: { ...room.settings, claudeAvailable: !!this.llm, hintSource: this.hinter ? 'claude' : 'classic' },
+      turnClock: room.turnClock && room.turnClock.endsAt > Date.now()
+        ? { seat: room.turnClock.seat, endsIn: room.turnClock.endsAt - Date.now(), total: room.turnClock.total }
+        : null,
+      history: room.history,
       game: room.game ? getView(room.game, seat) : null,
     };
   }
@@ -628,8 +715,27 @@ export class RoomManager {
       if (v.lastTrick) room.pauseUntil = Date.now() + this.opts.trickPause;
       room.trickKey = key;
     }
+    this._recordHistory(room);
     this._afterChange(room);
     return res;
+  }
+
+  _recordHistory(room) {
+    const v = getView(room.game, null);
+    if (v.phase !== 'handEnd' && v.phase !== 'matchEnd') return;
+    if (!v.handResult || room.recordedHand === v.handNumber && room.recordedGame === room.game) return;
+    room.recordedHand = v.handNumber;
+    room.recordedGame = room.game;
+    const r = v.handResult;
+    const name = (seat) => room.players.get(room.seats[seat])?.name ?? `Seat ${seat + 1}`;
+    room.history.hands.push({
+      hand: v.handNumber, dealer: v.dealer, bidder: r.bidder, bidderName: name(r.bidder), bid: r.bid,
+      trump: v.trump?.suit ?? null, made: r.made, teamPoints: r.teamPoints, delta: r.delta, scores: v.scores,
+    });
+    if (v.phase === 'matchEnd' && v.matchWinner != null) {
+      room.history.matches.push({ winner: v.matchWinner, scores: v.scores, hands: room.history.hands.length, endedAt: Date.now() });
+      room.history.series[v.matchWinner]++;
+    }
   }
 
   _isBotSeat(room, seat) {
@@ -652,6 +758,7 @@ export class RoomManager {
     else if (view.phase !== 'matchEnd') {
       const turn = currentTurn(game);
       if (turn !== null && turn !== undefined && this._isBotSeat(room, turn)) key = `bot:${seq}:${turn}`;
+      else if (turn !== null && turn !== undefined && room.settings.turnTimer > 0) key = `clock:${seq}:${turn}`;
     }
     // Keep an already-pending timer for the same state (e.g. a spectator joining
     // shouldn't postpone the bot).
@@ -672,6 +779,22 @@ export class RoomManager {
     }
 
     const turn = currentTurn(game);
+    if (key.startsWith('clock:')) {
+      // Human turn clock: when it runs out the classic bot plays for them.
+      const total = room.settings.turnTimer * this.opts.turnTimerUnit;
+      const delay = Math.max(0, room.pauseUntil - Date.now()) + total;
+      room.turnClock = { seat: turn, endsAt: Date.now() + delay, total };
+      room.botTimer = setTimeout(() => {
+        room.botTimer = null;
+        room.turnClock = null;
+        if (room.destroyed || room.game !== game) return;
+        if (getView(game, null).seq !== seq || currentTurn(game) !== turn || this._isBotSeat(room, turn)) return;
+        const p = room.players.get(room.seats[turn]);
+        this._systemChat(room, `${p?.name ?? 'A player'} ran out of time — auto-played`);
+        this._botActClassic(room, turn);
+      }, delay);
+      return;
+    }
     const delay = Math.max(this.opts.botDelay, room.pauseUntil - Date.now());
     room.botTimer = setTimeout(() => {
       room.botTimer = null;

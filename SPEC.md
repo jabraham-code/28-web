@@ -188,3 +188,7 @@ Share link format: `${location.origin}/?room=ABCD`. The UI reads the `room` quer
   - `RoomView.settings` gains `claudeAvailable: bool`, `botBrain: "claude"|"classic"` (host: `room:settings { botBrain }`, allowed any time).
   - Seat entries gain `ai: "claude"|"classic"|null`.
   - `chat:message` may carry `bot: true` (Claude table talk).
+- **Turn timer:** `settings.turnTimer` ∈ {0,20,30,45,60} seconds (default 45). `RoomView.turnClock = { seat, endsIn, total } | null` (ms). On expiry, the classic bot plays for the human, and a `chat:message` with `system: true` is posted.
+- **Hints:** `settings.hints` (default true) and `settings.hintSource: "claude"|"classic"`. `game:hint` → `{ action, label, reason, source }`, at most once per player per move. Its ack may arrive asynchronously.
+- **Reactions:** `room:react { emoji }` with emoji from 👍 😂 😮 😡 🔥 👏 🙏 😢, rate-limited to 4 per 4 s. It broadcasts `room:reaction { playerId, seat, name, emoji, ts }`.
+- **History:** `RoomView.history = { hands: [{hand, dealer, bidder, bidderName, bid, trump, made, teamPoints, delta, scores}], matches: [{winner, scores, hands, endedAt}], series: [n,n] }`. `hands` resets on each new match; `matches` and `series` persist for the room.

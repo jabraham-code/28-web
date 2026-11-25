@@ -66,12 +66,12 @@ export function renderBidding(panel, room, ctx) {
     const grid = h('div', { class: 'bid-grid', role: 'group', 'aria-label': 'Choose a bid' });
     if (acts.includes('bid') && min != null) {
       for (let v = min; v <= max; v++) {
-        grid.append(h('button', { class: `bid-btn${v >= 20 ? ' hi' : ''}${v >= 25 ? ' top' : ''}`, type: 'button', onclick: () => ctx.act({ type: 'bid', value: v }) }, String(v)));
+        grid.append(h('button', { class: `bid-btn${v >= 20 ? ' hi' : ''}${v >= 25 ? ' top' : ''}`, type: 'button', 'data-hint': `bid:${v}`, onclick: () => ctx.act({ type: 'bid', value: v }) }, String(v)));
       }
     }
     const row = h('div', { class: 'bp-actions' });
-    if (acts.includes('pass')) row.append(h('button', { class: 'btn btn-ghost', type: 'button', onclick: () => ctx.act({ type: 'pass' }) }, 'Pass'));
-    if (acts.includes('redeal')) row.append(h('button', { class: 'btn btn-ghost', type: 'button', title: 'You hold no point cards', onclick: () => ctx.act({ type: 'redeal' }) }, 'Redeal'));
+    if (acts.includes('pass')) row.append(h('button', { class: 'btn btn-ghost', type: 'button', 'data-hint': 'pass', onclick: () => ctx.act({ type: 'pass' }) }, 'Pass'));
+    if (acts.includes('redeal')) row.append(h('button', { class: 'btn btn-ghost', type: 'button', 'data-hint': 'redeal', title: 'You hold no point cards', onclick: () => ctx.act({ type: 'redeal' }) }, 'Redeal'));
     let hint = '';
     if (round === 1 && !acts.includes('pass') && acts.includes('bid')) hint = 'You open the bidding and must bid.';
     if (acts.includes('redeal')) hint = 'No point cards — you may ask for a redeal.';

@@ -18,7 +18,7 @@ export function mountTable(root, ctx) {
         <span class="brand-mark sm" aria-hidden="true">28</span>
         <div class="hud-meta"><span class="room-tag" title="Room code"></span><span class="hand-no"></span></div>
       </div>
-      <div class="hud-scores" aria-label="Match score">
+      <div class="hud-scores" aria-label="Match score — open scoreboard" role="button" tabindex="0" title="Open scoreboard">
         ${[0, 1].map((t) => `<div class="score t${t}"><div class="s-top"><span class="team-dot t${t}"></span><span class="s-name"></span></div><div class="s-row"><span class="s-val">0</span><span class="s-target"></span></div><div class="s-bar" aria-hidden="true"><i></i></div></div>`).join('')}
       </div>
       <div class="hud-contract">
@@ -30,7 +30,14 @@ export function mountTable(root, ctx) {
         <button class="btn btn-ghost btn-xs brain-toggle" type="button" data-act="brain" hidden></button>
         <button class="icon-btn" type="button" data-act="log" aria-label="Event log" aria-expanded="false"><svg viewBox="0 0 24 24" class="ico"><path d="M5 6h14M5 12h14M5 18h9" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></button>
         <button class="icon-btn" type="button" data-act="chat" aria-label="Chat" aria-expanded="false"><svg viewBox="0 0 24 24" class="ico"><path d="M4 5h16v11H9l-5 4z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/></svg><span class="badge" hidden></span></button>
-        <button class="icon-btn" type="button" data-act="rules" aria-label="How to play"><svg viewBox="0 0 24 24" class="ico"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" fill="none"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .9-1 1.7M12 17h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></button>
+        <div class="more-wrap">
+          <button class="icon-btn" type="button" data-act="more" aria-label="More options" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 24 24" class="ico"><circle cx="5" cy="12" r="1.8" fill="currentColor"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><circle cx="19" cy="12" r="1.8" fill="currentColor"/></svg></button>
+          <div class="more-menu glass" role="menu" hidden>
+            <button type="button" role="menuitem" data-act="scoreboard"><svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg>Scoreboard</button>
+            <button type="button" role="menuitemcheckbox" data-act="sound" aria-checked="true"><svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path class="snd-on" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/><path class="snd-off" d="M17 9l5 6M22 9l-5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg><span class="snd-label">Sound &amp; vibration: on</span></button>
+            <button type="button" role="menuitem" data-act="rules"><svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" fill="none"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .9-1 1.7M12 17h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>How to play</button>
+          </div>
+        </div>
         <button class="icon-btn" type="button" data-act="leave" aria-label="Leave room"><svg viewBox="0 0 24 24" class="ico"><path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></button>
       </div>
     </header>
@@ -54,10 +61,17 @@ export function mountTable(root, ctx) {
       <div class="my-area">
         <div class="action-bar">
           <div class="status-text" aria-live="polite"></div>
+          <span class="turn-clock" aria-live="off" hidden></span>
           <div class="action-btns">
+            <button class="btn btn-ghost btn-sm hint-btn" type="button" data-act="hint" hidden><span aria-hidden="true">💡</span><span class="hint-label">Hint</span></button>
             <button class="btn btn-gold btn-sm" type="button" data-act="callTrump" hidden>Call trump</button>
             <button class="btn btn-gold btn-sm" type="button" data-act="playTrumpCard" hidden>Play concealed trump</button>
           </div>
+        </div>
+        <div class="hint-box" role="status" hidden></div>
+        <div class="react-wrap">
+          <button class="icon-btn react-btn" type="button" data-act="react" aria-label="Send a reaction" aria-haspopup="true" aria-expanded="false"><span aria-hidden="true">😊</span></button>
+          <div class="react-pop glass" role="menu" hidden></div>
         </div>
         <div class="hand-row">
           <div class="hand" role="group" aria-label="Your hand"></div>
@@ -103,7 +117,13 @@ export function mountTable(root, ctx) {
     const act = b.dataset.act;
     if (act === 'log') toggleDrawer(logDrawer, b);
     else if (act === 'chat') toggleDrawer(chatDrawer, b);
-    else if (act === 'rules') ctx.rules();
+    else if (act === 'rules') { closeMenus(); ctx.rules(); }
+    else if (act === 'more') { const m = q('.more-menu'); const open = m.hidden; closeMenus(); m.hidden = !open; b.setAttribute('aria-expanded', String(open)); }
+    else if (act === 'scoreboard') { closeMenus(); ctx.scoreboard(); }
+    else if (act === 'sound') { ctx.sounds.toggle(); }
+    else if (act === 'hint') askHint(b);
+    else if (act === 'react') { const pop = q('.react-pop'); const open = pop.hidden; closeMenus(); pop.hidden = !open; b.setAttribute('aria-expanded', String(open)); }
+    else if (b.dataset.emoji) { closeMenus(); ctx.react(b.dataset.emoji); }
     else if (act === 'leave') ctx.leave(true);
     else if (act === 'brain') ctx.call('setSettings', { botBrain: room.settings.botBrain === 'claude' ? 'classic' : 'claude' });
     else if (act === 'callTrump') doAct({ type: 'callTrump' });
@@ -111,7 +131,8 @@ export function mountTable(root, ctx) {
   });
   root.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-      if (!chatDrawer.hidden) toggleDrawer(chatDrawer);
+      if (!q('.more-menu').hidden || !q('.react-pop').hidden) closeMenus();
+      else if (!chatDrawer.hidden) toggleDrawer(chatDrawer);
       else if (!logDrawer.hidden) toggleDrawer(logDrawer);
     }
   });
@@ -125,6 +146,80 @@ export function mountTable(root, ctx) {
   concealedEl.addEventListener('click', (e) => {
     if (e.target.closest('.card.playable')) doAct({ type: 'playTrumpCard' });
   });
+
+  const REACTIONS = ['👍', '😂', '😮', '😡', '🔥', '👏', '🙏', '😢'];
+  q('.react-pop').innerHTML = REACTIONS.map((e) => `<button type="button" role="menuitem" data-emoji="${e}" aria-label="React ${e}">${e}</button>`).join('');
+  q('.hud-scores').addEventListener('click', () => ctx.scoreboard());
+  q('.hud-scores').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ctx.scoreboard(); } });
+  document.addEventListener('click', (e) => { if (!e.target.closest('.more-wrap, .react-wrap')) closeMenus(); });
+  function closeMenus() {
+    q('.more-menu').hidden = true; q('.react-pop').hidden = true;
+    q('[data-act="more"]').setAttribute('aria-expanded', 'false');
+    q('[data-act="react"]').setAttribute('aria-expanded', 'false');
+  }
+  function syncSound(on) {
+    const b = q('[data-act="sound"]');
+    b.setAttribute('aria-checked', String(on));
+    b.classList.toggle('off', !on);
+    q('.snd-label').textContent = `Sound & vibration: ${on ? 'on' : 'off'}`;
+  }
+  syncSound(ctx.sounds.enabled);
+  ctx.sounds.onChange(syncSound);
+
+  // -------------------------------------------------------------- hints
+  let hintSeq = null;
+  let lastHint = null;
+  async function askHint(btn) {
+    if (!room?.game || btn.disabled) return;
+    const seq = room.game.seq;
+    btn.disabled = true;
+    btn.classList.add('busy');
+    q('.hint-label').textContent = 'Thinking…';
+    try {
+      const res = await ctx.hint();
+      if (!res?.ok || room?.game?.seq !== seq) return;
+      hintSeq = seq;
+      lastHint = res;
+      showHint(res);
+      ctx.sounds.play('hint');
+    } finally {
+      btn.classList.remove('busy');
+      q('.hint-label').textContent = 'Hint';
+      renderActionBar(room, room.game);
+    }
+  }
+  function hintTarget(a) {
+    if (a.type === 'play' || a.type === 'chooseTrump') return handEl.querySelector(`.card[data-card="${a.card}"]`) || bidPanel.querySelector(`.card[data-card="${a.card}"]`);
+    if (a.type === 'playTrumpCard') return concealedEl.querySelector('.card') || q('[data-act="playTrumpCard"]');
+    if (a.type === 'callTrump') return q('[data-act="callTrump"]');
+    if (a.type === 'bid') return bidPanel.querySelector(`[data-hint="bid:${a.value}"]`);
+    return bidPanel.querySelector(`[data-hint="${a.type}"]`);
+  }
+  function showHint(res) {
+    clearHint();
+    const box = q('.hint-box');
+    box.innerHTML = `<span class="hb-ico" aria-hidden="true">💡</span><span><b>${esc(res.label)}</b>${res.reason ? ` — ${esc(res.reason)}` : ''}</span><span class="hb-src">${res.source === 'claude' ? `${SPARKLE} Claude` : 'Bot'}</span>`;
+    box.hidden = false;
+    hintTarget(res.action)?.classList.add('hinted');
+  }
+  function clearHint() {
+    q('.hint-box').hidden = true;
+    root.querySelectorAll('.hinted').forEach((el) => el.classList.remove('hinted'));
+  }
+
+  // -------------------------------------------------------------- reactions
+  /** Floating emoji above a player's seat (or the table centre for spectators). */
+  function react(seat, emoji, name) {
+    if (!room?.game) return;
+    const anchor = seat == null ? felt : $('.plate', seatEls[posOf(seat, room.you.seat ?? 0)]);
+    const r = anchor.getBoundingClientRect();
+    const el = h('div', { class: 'reaction-float', 'aria-hidden': 'true' }, h('span', { class: 'rf-emoji' }, emoji), seat == null && name ? h('span', { class: 'rf-name' }, name) : null);
+    el.style.left = `${r.left + r.width / 2}px`;
+    el.style.top = `${seat == null ? r.top + r.height * 0.3 : r.top}px`;
+    el.style.setProperty('--drift', `${Math.round((Math.random() - 0.5) * 40)}px`);
+    document.body.append(el);
+    setTimeout(() => el.remove(), 2200);
+  }
 
   function toggleDrawer(d) {
     const other = d === logDrawer ? chatDrawer : logDrawer;
@@ -193,8 +288,10 @@ export function mountTable(root, ctx) {
     renderConcealed(r, g);
     renderTrumpSlots(r, g, P);
     renderBubbles(r, g, P);
+    if (hintSeq !== null && hintSeq !== g.seq) { hintSeq = null; lastHint = null; clearHint(); }
     renderActionBar(r, g);
     renderBidding(bidPanel, r, ctx);
+    if (hintSeq === g.seq && lastHint) hintTarget(lastHint.action)?.classList.add('hinted'); // panels may have re-rendered
     felt.dataset.phase = g.phase;
     renderTrick(r, g, P, snap, first);
     renderLog(r, g);
@@ -274,10 +371,21 @@ export function mountTable(root, ctx) {
       const thinking = isTurn && !!p && (p.isBot || p.botControlled) && p.ai === 'claude' && ['bidding1', 'bidding2', 'chooseTrump', 'playing'].includes(g.phase);
       plate.classList.toggle('is-thinking', thinking);
       if (thinking) plate.setAttribute('aria-description', 'thinking'); else plate.removeAttribute('aria-description');
-      // restart the timer ring whenever the turn moves to this seat
-      if (isTurn && (prev?.turn !== seat || prev?.phase !== g.phase)) {
-        const ring = $('.ring', plate);
-        if (ring) { ring.classList.remove('run'); void ring.offsetWidth; ring.classList.add('run'); }
+      // timer ring: follows the server's turn clock; decorative 30 s fill when the timer is off
+      const ring = $('.ring', plate);
+      const tc = r.turnClock && r.turnClock.seat === seat ? r.turnClock : null;
+      const ringKey = isTurn ? `${g.seq}|${tc ? tc.total : 'free'}` : '';
+      if (ring && ring.dataset.key !== ringKey) {
+        ring.dataset.key = ringKey;
+        ring.classList.remove('run');
+        if (isTurn) {
+          void ring.offsetWidth;
+          const total = tc ? tc.total / 1000 : 30;
+          ring.style.animationDuration = `${total}s`;
+          ring.style.animationDelay = tc ? `${-((tc.total - tc.endsIn) / 1000).toFixed(2)}s` : '0s';
+          ring.classList.toggle('timed', !!tc);
+          ring.classList.add('run');
+        }
       }
     }
   }
@@ -395,6 +503,11 @@ export function mountTable(root, ctx) {
     const me = r.you.seat;
     const myTurn = me != null && g.turn === me;
     const acts = myTurn ? g.legal?.actions || [] : [];
+    const hb = q('[data-act="hint"]');
+    const decide = ['bid', 'pass', 'chooseTrump', 'play', 'callTrump', 'playTrumpCard'].some((a) => acts.includes(a));
+    hb.hidden = !(r.settings?.hints && decide);
+    if (!hb.classList.contains('busy')) hb.disabled = hintSeq === g.seq;
+    q('.react-wrap').hidden = !['playing', 'bidding1', 'bidding2', 'chooseTrump', 'handEnd', 'matchEnd'].includes(g.phase);
     q('[data-act="callTrump"]').hidden = !acts.includes('callTrump');
     q('[data-act="playTrumpCard"]').hidden = !acts.includes('playTrumpCard');
     let s = '';
@@ -648,5 +761,28 @@ export function mountTable(root, ctx) {
     setDrawer(chatDrawer, false);
   }
 
-  return { render, whenIdle, setUnread, reset, say, chatVisible: () => !chatDrawer.hidden };
+  // -------------------------------------------------------------- my turn countdown
+  let clockTimer = null;
+  function renderClock(r) {
+    clearInterval(clockTimer);
+    const el = q('.turn-clock');
+    const tc = r?.turnClock;
+    const mine = tc && r.you.seat != null && tc.seat === r.you.seat;
+    el.hidden = !mine;
+    if (!mine) return;
+    const end = Date.now() + tc.endsIn;
+    const tick = () => {
+      const s = Math.max(0, Math.ceil((end - Date.now()) / 1000));
+      el.textContent = `${s}s`;
+      el.classList.toggle('low', s <= 10);
+      if (s <= 0) clearInterval(clockTimer);
+    };
+    tick();
+    clockTimer = setInterval(tick, 250);
+  }
+
+  return {
+    render: (r) => { render(r); renderClock(r); },
+    whenIdle, setUnread, reset, say, react, chatVisible: () => !chatDrawer.hidden,
+  };
 }

@@ -150,13 +150,51 @@ export function showMatchEnd(room, ctx) {
     <div class="me-scores">
       <div class="t0"><span class="team-dot t0"></span>${esc(teamLabel(room, 0))}<b>${g.scores[0]}</b></div>
       <div class="t1"><span class="team-dot t1"></span>${esc(teamLabel(room, 1))}<b>${g.scores[1]}</b></div>
-    </div>`;
+    </div>
+    ${room.history?.matches?.length ? `<p class="me-series">Series: <span class="t0-text">${room.history.series[0]}</span> – <span class="t1-text">${room.history.series[1]}</span> <span class="muted">(${room.history.matches.length} match${room.history.matches.length > 1 ? 'es' : ''})</span></p>` : ''}`;
   const actions = [];
-  if (room.you.isHost) actions.push(h('button', { class: 'btn btn-gold', type: 'button', 'data-autofocus': '', onclick: () => ctx.start() }, 'Play again'));
+  if (room.you.isHost) actions.push(h('button', { class: 'btn btn-gold', type: 'button', 'data-autofocus': '', onclick: () => ctx.start() }, 'Rematch'));
   else actions.push(h('span', { class: 'muted' }, 'Waiting for the host to start a new match…'));
+  actions.push(h('button', { class: 'btn btn-ghost', type: 'button', onclick: () => showScoreboard(room) }, 'Scoreboard'));
   actions.push(h('button', { class: 'btn btn-ghost', type: 'button', onclick: () => ctx.leave() }, 'Leave room'));
   openModal('matchEnd', { title, body, actions, dismissable: false, cls: 'match-end' });
   stopConfetti?.();
   if (mine == null || mine === w) stopConfetti = confetti(document.body);
 }
 export function hideMatchEnd() { stopConfetti?.(); stopConfetti = null; closeModal('matchEnd', true); }
+
+// ---------------------------------------------------------------- scoreboard
+export function showScoreboard(room) {
+  const hist = room?.history || { hands: [], matches: [], series: [0, 0] };
+  const g = room?.game;
+  const team = (t) => `<span class="team-dot t${t}"></span>${esc(teamLabel(room, t))}`;
+  const series = hist.series || [0, 0];
+  const rows = hist.hands.slice().reverse().map((x) => {
+    const bt = x.bidder % 2;
+    const d = x.delta[bt];
+    return `<tr class="${x.made ? 'made' : 'failed'}">
+      <td>${x.hand}</td>
+      <td><span class="t${bt}-text">${esc(x.bidderName)}</span></td>
+      <td><b>${x.bid}</b></td>
+      <td>${x.trump ? suitIcon(x.trump) : '–'}</td>
+      <td><span class="t0-text">${x.teamPoints[0]}</span>–<span class="t1-text">${x.teamPoints[1]}</span></td>
+      <td><span class="sb-res">${x.made ? 'Made' : 'Failed'}</span> <span class="sb-delta ${d > 0 ? 'pos' : 'neg'}">${d > 0 ? '+' : ''}${d}</span></td>
+      <td class="sb-score"><span class="t0-text">${x.scores[0]}</span> · <span class="t1-text">${x.scores[1]}</span></td>
+    </tr>`;
+  }).join('');
+  const matches = hist.matches.map((m, i) => `<li><span>Match ${i + 1}</span><span class="t${m.winner}-text">${esc(teamLabel(room, m.winner))} won</span><span class="muted">${m.scores[0]} – ${m.scores[1]} · ${m.hands} hands</span></li>`).join('');
+  const body = `
+    <div class="sb">
+      <div class="sb-series">
+        <div class="t0">${team(0)}<b>${series[0]}</b></div>
+        <div class="sb-vs"><span>Matches won</span>vs</div>
+        <div class="t1"><b>${series[1]}</b>${team(1)}</div>
+      </div>
+      ${g ? `<p class="sb-now muted">This match: <span class="t0-text">${g.scores[0]}</span> – <span class="t1-text">${g.scores[1]}</span> · first to ±${g.targetScore}</p>` : ''}
+      ${rows ? `<div class="sb-table-wrap"><table class="sb-table">
+        <thead><tr><th>#</th><th>Bidder</th><th>Bid</th><th>Trump</th><th>Points</th><th>Result</th><th>Score</th></tr></thead>
+        <tbody>${rows}</tbody></table></div>` : '<p class="muted sb-empty">No hands finished yet in this match.</p>'}
+      ${matches ? `<h3 class="eyebrow">Previous matches</h3><ul class="sb-matches">${matches}</ul>` : ''}
+    </div>`;
+  openModal('scoreboard', { title: 'Scoreboard', body, cls: 'scoreboard', actions: [h('button', { class: 'btn btn-gold', type: 'button', 'data-autofocus': '', onclick: () => closeModal('scoreboard') }, 'Close')] });
+}
