@@ -265,3 +265,4 @@
   .lobby-table.rummy[data-n="5"] .lt-seat.lt-ring, .lobby-table.rummy[data-n="6"] .lt-seat.lt-ring { width: 29%; }
   .lobby-table.rummy .lt-empty, .lobby-table.rummy .lt-player { min-height: 0; }
 }
+.brand-mark.rummy { color: #b3342a; }

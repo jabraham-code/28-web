@@ -251,6 +251,11 @@ export function mountLobby(root, ctx) {
     const rummy = isRummy(r);
     const nSeats = r.seats.length;
     root.querySelector('.lobby-main').dataset.game = r.settings.gameType;
+    // heading follows the chosen game
+    const game = GAMES[r.settings.gameType] || GAMES['28'];
+    const bn = $('.brand-name', root), bm = $('.brand-mark', root);
+    if (bn && bn.textContent !== game.title) bn.textContent = game.title;
+    if (bm && bm.textContent !== game.mark) { bm.textContent = game.mark; bm.classList.toggle('rummy', r.settings.gameType === 'rummy'); }
     root.querySelectorAll('.rummy-only').forEach((el) => (el.hidden = !rummy));
     root.querySelectorAll('.only-28').forEach((el) => (el.hidden = rummy));
     if (rummy) $('.lt-teams', root).textContent = `${nSeats} players \u00b7 pool ${r.settings.poolLimit}`;

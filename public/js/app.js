@@ -49,7 +49,10 @@ const ctx = {
   scoreboard: () => { if (net?.state?.game?.gameType !== 'rummy') showScoreboard(net?.state); }, // rummy table shows its own
   act: (action) => call('action', action),
   start: () => call('start'),
-  rules: () => showRules(),
+  // "How to play" follows the room's game (rummy rules live with the rummy UI, loaded on demand)
+  rules: () => (net?.state?.settings?.gameType === 'rummy'
+    ? import('./ui/rummy/rmodals.js').then((m) => m.showRummyRules()).catch(() => showRules())
+    : showRules()),
   async leave(confirmFirst = false) {
     const g = net?.state?.game;
     if (confirmFirst && g && !['matchEnd'].includes(g.phase) && net.state.you.seat != null &&
