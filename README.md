@@ -6,6 +6,7 @@ Rules follow the main game on [pagat.com/jass/28](https://www.pagat.com/jass/28.
 
 ## Features
 
+- **Two games:** the host picks **28** or **Rummy** (13-card Indian Rummy, pool 101 or 201, 2–6 players) in the lobby. Rummy rules are in [`RUMMY.md`](RUMMY.md).
 - **Rooms:** 4-letter room codes and share links. Players pick their seats, others can watch as spectators, and the host controls the room.
 - **Full 28 rules:**
   - compulsory first bid, with a redeal allowed if that bidder holds no point cards;
@@ -106,7 +107,9 @@ Any host that runs a long-lived Node process with WebSockets works: Railway, Fly
 ```
 server/
   index.js      Express + Socket.IO entry point (/healthz, static files)
-  rooms.js      Room manager: seats, bots, timers, reconnection, chat, voice signaling
+  rooms.js      Game-agnostic room manager: seats, bots, timers, hints, history, reconnection, chat, voice signaling
+  games/        Game modules the rooms plug into (index.js registry, twentyEight.js, rummy.js)
+  rummy/        Rummy engine + bot
   engine.js     Pure rules engine for 28 (state machine, legal moves, scoring)
   cards.js      Deck, ranks, points helpers
   bot.js        Heuristic (classic) bot
@@ -118,8 +121,10 @@ public/
   js/net.js     Socket.IO client wrapper (sessions, reconnect)
   js/voice.js   WebRTC voice mesh
   js/ui/        Lobby, table, bidding, cards, modals, chat, voice controls
+  js/ui/rummy/  Rummy table (#screen-rummy)
 test/           node:test suites (engine fuzz, rooms, Claude bots, voice)
-SPEC.md         Rules as implemented + engine/socket contracts
+SPEC.md         28 rules as implemented + engine/socket contracts
+RUMMY.md        Rummy rules + engine/platform/UI contracts
 render.yaml     Render deployment blueprint
 ```
 

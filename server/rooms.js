@@ -1,4 +1,8 @@
-// Room manager for 28 Online (SPEC §3).
+// Room manager for 28 Online (SPEC §3) — game-type agnostic.
+//
+// Everything game-specific (engine, bots, hints, history, pauses) lives in a
+// game module (server/games/*.js, interface in RUMMY.md §3). The room picks the
+// module from `settings.gameType` ("28" | "rummy").
 //
 // Transport-agnostic: a "conn" is any object with a unique `id` and an
 // `emit(event, data)` method (a socket.io Socket satisfies this). The socket
@@ -8,14 +12,14 @@
 // with plain fake conns.
 
 import crypto from 'node:crypto';
-import { createGame, applyAction, getView, currentTurn } from './engine.js';
-import { chooseAction } from './bot.js';
-import { chooseActionLLM, hintLLM, legalOptions, llmAvailable } from './llmBot.js';
+import { GAMES, DEFAULT_GAME, getGame } from './games/index.js';
+import twentyEight from './games/twentyEight.js';
+import { MIN_PLAYERS, MAX_PLAYERS, DEFAULT_PLAYERS, POOL_LIMITS, DEFAULT_POOL_LIMIT } from './games/rummyLimits.js';
 
 export const DEFAULT_OPTIONS = Object.freeze({
   botDelay: 800,          // ms before a bot acts once it's their turn
   trickPause: 1400,       // ms pause after a trick completes before bots act
-  nextHandDelay: 8000,    // ms in handEnd before auto nextHand
+  nextHandDelay: 8000,    // ms in handEnd (28) / dealEnd (rummy) before auto nextHand / nextDeal
   takeoverDelay: 60000,   // ms a disconnected human waits before a bot plays for them
   emptyRoomTtl: 600000,   // ms a room with no connected humans survives
   chatLimit: 5,           // max messages ...
@@ -75,17 +79,19 @@ function cleanCode(code) {
   return typeof code === 'string' ? code.trim().toUpperCase() : '';
 }
 
-function parseSeat(seat) {
+function parseSeat(seat, count) {
   const s = typeof seat === 'string' && seat.trim() !== '' ? Number(seat) : seat;
-  return Number.isInteger(s) && s >= 0 && s <= 3 ? s : null;
+  return Number.isInteger(s) && s >= 0 && s < count ? s : null;
 }
 
 export class RoomManager {
   constructor(options = {}) {
     this.opts = { ...DEFAULT_OPTIONS, ...options };
     // Claude bots: injected brain (tests) or the real one when a key is configured.
-    this.llm = options.llm !== undefined ? options.llm : (llmAvailable() ? chooseActionLLM : null);
-    this.hinter = options.hint !== undefined ? options.hint : (llmAvailable() ? hintLLM : null);
+    // (Only game modules with a `claude` entry — currently 28 — use them.)
+    const claude = twentyEight.claude;
+    this.llm = options.llm !== undefined ? options.llm : (claude.available() ? claude.choose : null);
+    this.hinter = options.hint !== undefined ? options.hint : (claude.available() ? claude.hint : null);
     this.logger = options.logger ?? console;
     this.rooms = new Map(); // code -> room
     this.conns = new Map(); // conn.id -> { conn, code, playerId }
@@ -187,7 +193,7 @@ export class RoomManager {
     const ctx = this._ctx(conn);
     if (!ctx) return fail('Not in a room');
     const { room, player } = ctx;
-    const s = parseSeat(seat);
+    const s = parseSeat(seat, room.seats.length);
     if (s === null) return fail('Invalid seat');
     if (!this._isLobby(room)) return fail('Game in progress');
     if (room.seats[s] !== null) return room.seats[s] === player.playerId ? ok() : fail('Seat is taken');
@@ -215,7 +221,7 @@ export class RoomManager {
     const ctx = this._hostCtx(conn);
     if (ctx.error) return fail(ctx.error);
     const { room } = ctx;
-    const s = parseSeat(seat);
+    const s = parseSeat(seat, room.seats.length);
     if (s === null) return fail('Invalid seat');
     if (!this._isLobby(room)) return fail('Game in progress');
     if (room.seats[s] !== null) return fail('Seat is taken');
@@ -228,7 +234,7 @@ export class RoomManager {
     const ctx = this._hostCtx(conn);
     if (ctx.error) return fail(ctx.error);
     const { room } = ctx;
-    const s = parseSeat(seat);
+    const s = parseSeat(seat, room.seats.length);
     if (s === null) return fail('Invalid seat');
     if (!this._isLobby(room)) return fail('Game in progress');
     const pid = room.seats[s];
@@ -243,7 +249,7 @@ export class RoomManager {
     return ok();
   }
 
-  onSettings(conn, { targetScore, botBrain, turnTimer, hints } = {}) {
+  onSettings(conn, { targetScore, botBrain, turnTimer, hints, gameType, players, poolLimit } = {}) {
     const ctx = this._hostCtx(conn);
     if (ctx.error) return fail(ctx.error);
     const { room } = ctx;
@@ -254,22 +260,40 @@ export class RoomManager {
     }
     if (turnTimer !== undefined && !this.opts.turnTimers.includes(Number(turnTimer))) return fail('Invalid turn timer');
     if (hints !== undefined && typeof hints !== 'boolean') return fail('Invalid hints setting');
+    // Settings that change the match itself are lobby only. The rest may change any time.
+    const lobbyOnly = targetScore !== undefined || gameType !== undefined || players !== undefined || poolLimit !== undefined;
+    if (lobbyOnly && !this._isLobby(room)) return fail('Game in progress');
     let t;
     if (targetScore !== undefined) {
-      // Starting points change the match itself, so lobby only. The rest may change any time.
-      if (!this._isLobby(room)) return fail('Game in progress');
       t = Number(targetScore);
       if (!Number.isInteger(t) || t < this.opts.minTargetScore || t > this.opts.maxTargetScore) {
         return fail(`Starting points must be ${this.opts.minTargetScore}–${this.opts.maxTargetScore}`);
       }
     }
+    if (gameType !== undefined && !GAMES[gameType]) return fail(gameType === 'rummy' ? 'Rummy is not available on this server' : 'Unknown game');
+    let n;
+    if (players !== undefined) {
+      n = Number(players);
+      if (!Number.isInteger(n) || n < MIN_PLAYERS || n > MAX_PLAYERS) return fail(`Players must be ${MIN_PLAYERS}–${MAX_PLAYERS}`);
+    }
+    let pool;
+    if (poolLimit !== undefined) {
+      pool = Number(poolLimit);
+      if (!POOL_LIMITS.includes(pool)) return fail(`Pool must be ${POOL_LIMITS.join(' or ')}`);
+    }
     if (botBrain !== undefined) room.settings.botBrain = botBrain;
     if (turnTimer !== undefined) {
       room.settings.turnTimer = Number(turnTimer);
+      room.lastClock = null;
       this._clearGameTimers(room); // re-arm the current turn with the new limit
     }
     if (hints !== undefined) room.settings.hints = hints;
     if (t !== undefined) room.settings.targetScore = t;
+    if (pool !== undefined) room.settings.poolLimit = pool;
+    const before = this._tableShape(room);
+    if (gameType !== undefined) room.settings.gameType = gameType;
+    if (n !== undefined) room.settings.players = n;
+    if (this._tableShape(room) !== before) this._changeTable(room);
     this._afterChange(room);
     return ok();
   }
@@ -279,13 +303,16 @@ export class RoomManager {
     if (ctx.error) return fail(ctx.error);
     const { room } = ctx;
     if (!this._isLobby(room)) return fail('Game already in progress');
-    if (room.seats.some((s) => s === null)) return fail('All 4 seats must be filled');
+    if (room.seats.some((s) => s === null)) return fail(`All ${room.seats.length} seats must be filled`);
+    const mod = getGame(room.settings.gameType);
     this._clearGameTimers(room);
-    room.game = createGame({ targetScore: room.settings.targetScore });
+    room.lastClock = null;
+    room.game = mod.createGame(room.settings, room.seats.map((_, i) => i));
+    room.gameMod = mod;
     room.status = 'playing';
     room.history.hands = [];
-    room.recordedKey = null;
-    room.trickKey = this._trickKey(room.game);
+    room.recorded = null;
+    room.pauseKey = mod.pauseKey(mod.getView(room.game, null));
     room.pauseUntil = 0;
     this._afterChange(room);
     return ok();
@@ -298,14 +325,13 @@ export class RoomManager {
     if (room.status !== 'playing' || !room.game) return fail('No game in progress');
     if (player.seat === null) return fail('Spectators cannot act');
     if (typeof action.type !== 'string') return fail('Invalid action');
+    const mod = room.gameMod;
     const clean = { type: action.type };
-    if ('value' in action) clean.value = action.value;
-    if ('card' in action) clean.card = action.card;
-    if ('trump' in action) clean.trump = action.trump;
+    for (const k of mod.actionFields) if (k in action) clean[k] = action[k];
     const res = this._apply(room, player.seat, clean);
-    if (res.ok && clean.type === 'endHand') {
-      const r = room.game.handResult;
-      this._systemChat(room, `${player.name} ended the hand — contract ${r?.made ? 'made' : 'beaten'}`);
+    if (res.ok) {
+      const note = mod.actionNotice(clean, mod.getView(room.game, null), player.name);
+      if (note) this._systemChat(room, note);
     }
     return res.ok ? ok() : fail(res.error || 'Illegal action');
   }
@@ -328,7 +354,7 @@ export class RoomManager {
 
   // ----------------------------------------------------------- hints & reactions
 
-  /** Suggest a move for the asking player (one hint per turn). May resolve asynchronously. */
+  /** Suggest a move for the asking player (one hint per move). May resolve asynchronously. */
   onHint(conn) {
     const ctx = this._ctx(conn);
     if (!ctx) return fail('Not in a room');
@@ -336,29 +362,24 @@ export class RoomManager {
     if (!room.settings.hints) return fail('Hints are turned off for this room');
     if (room.status !== 'playing' || !room.game || player.seat === null) return fail('No game to give hints for');
     const game = room.game;
-    if (currentTurn(game) !== player.seat) return fail("It's not your turn");
-    const view = getView(game, player.seat);
-    const opts = legalOptions(view);
-    if (!opts.length) return fail('Nothing to decide right now');
+    const mod = room.gameMod;
+    if (mod.currentTurn(game) !== player.seat) return fail("It's not your turn");
+    const view = mod.getView(game, player.seat);
+    if (!mod.options(view).length) return fail('Nothing to decide right now');
     if (player.hintSeq === view.seq) return fail('You already got a hint for this move');
     player.hintSeq = view.seq;
-    const describe = (action, reason, source) => {
-      const o = opts.find((x) => JSON.stringify(x.action) === JSON.stringify(action));
-      return ok({ action, label: o ? o.label : action.type, reason, source });
-    };
+    const answer = (action, reason, source) => ok({ action, label: mod.describe(action, view), reason, source });
     const classic = () => {
-      let a = null;
-      try { a = chooseAction(view); } catch { /* fall through */ }
-      if (!a || !opts.some((x) => JSON.stringify(x.action) === JSON.stringify(a))) a = opts[0].action;
-      return describe(a, 'Suggested by the classic bot.', 'classic');
+      const a = mod.hintAction(view);
+      return a ? answer(a, 'Suggested by the classic bot.', 'classic') : fail('Nothing to decide right now');
     };
-    if (!this.hinter) return classic();
+    if (!this.hinter || !mod.claude) return classic();
     const names = room.seats.map((pid) => room.players.get(pid)?.name);
     return Promise.resolve()
       .then(() => this.hinter(view, names))
       .then((res) => {
-        if (!res?.action || !opts.some((x) => JSON.stringify(x.action) === JSON.stringify(res.action))) return classic();
-        return describe(res.action, res.reason || '', 'claude');
+        if (!res?.action || !mod.isLegal(view, res.action)) return classic();
+        return answer(res.action, res.reason || '', 'claude');
       })
       .catch((err) => {
         this.logger.warn?.(`[rooms] Claude hint failed: ${err?.message || err}`);
@@ -465,15 +486,21 @@ export class RoomManager {
       code,
       hostId: null,
       players: new Map(), // playerId -> player (humans + bots)
-      seats: [null, null, null, null], // playerId | null
+      seats: [null, null, null, null], // playerId | null; length = module.seatCount(settings)
       status: 'lobby',
-      settings: { targetScore: 5, botBrain: 'classic', turnTimer: 45, hints: true },
+      settings: {
+        gameType: DEFAULT_GAME, targetScore: 5, botBrain: 'classic', turnTimer: 45, hints: true,
+        players: DEFAULT_PLAYERS, poolLimit: DEFAULT_POOL_LIMIT, // rummy
+      },
       history: { hands: [], matches: [], series: [0, 0] },
       game: null,
+      gameMod: null,     // module that created `game`
+      recorded: null,    // history dedupe marker (owned by the module)
+      pauseKey: null,
+      lastClock: null,   // { seat, game, endsAt } for modules with clockPerTurn
       botTimer: null,
       nextHandTimer: null,
       cleanupTimer: null,
-      trickKey: null,
       timerKey: null,
       pauseUntil: 0,
       destroyed: false,
@@ -556,7 +583,53 @@ export class RoomManager {
 
   _isLobby(room) {
     // After matchEnd the room behaves like a lobby again (seat changes, settings, restart).
-    return room.status === 'lobby' || (!!room.game && getView(room.game, null).phase === 'matchEnd');
+    return room.status === 'lobby' || (!!room.game && room.gameMod.isOver(room.gameMod.getView(room.game, null)));
+  }
+
+  /** The module for the current game, or for the selected game type in the lobby. */
+  _mod(room) {
+    return room.game ? room.gameMod : getGame(room.settings.gameType);
+  }
+
+  /** What identifies the table layout + series: game type and seat count. */
+  _tableShape(room) {
+    const mod = getGame(room.settings.gameType);
+    return `${mod.id}:${mod.seatCount(room.settings)}`;
+  }
+
+  /**
+   * Game type or player count changed (lobby only): drop any finished game,
+   * resize the seats and reset the room's history/series (they are per table shape).
+   * Bots in removed seats leave; humans move to a free seat if there is one,
+   * otherwise they become spectators.
+   */
+  _changeTable(room) {
+    const mod = getGame(room.settings.gameType);
+    const n = mod.seatCount(room.settings);
+    if (room.game) {
+      this._clearGameTimers(room);
+      room.game = null;
+      room.gameMod = null;
+      room.status = 'lobby';
+    }
+    const displaced = [];
+    while (room.seats.length > n) {
+      const pid = room.seats.pop();
+      const p = pid && room.players.get(pid);
+      if (!p) continue;
+      p.seat = null;
+      if (p.isBot) room.players.delete(pid);
+      else displaced.push(p);
+    }
+    while (room.seats.length < n) room.seats.push(null);
+    for (const p of displaced) {
+      const free = room.seats.indexOf(null);
+      if (free < 0) continue; // stays a spectator
+      room.seats[free] = p.playerId;
+      p.seat = free;
+    }
+    room.history = { hands: [], matches: [], series: mod.newSeries(room.settings) };
+    room.recorded = null;
   }
 
   _removePlayer(room, player) {
@@ -677,12 +750,17 @@ export class RoomManager {
         .filter((p) => !p.isBot && p.seat === null)
         .map((p) => ({ playerId: p.playerId, name: p.name, connected: !!p.connected, voice: !!p.voice, muted: !!p.muted })),
       status: room.status,
-      settings: { ...room.settings, claudeAvailable: !!this.llm, hintSource: this.hinter ? 'claude' : 'classic' },
+      gameType: room.settings.gameType,
+      settings: {
+        ...room.settings,
+        claudeAvailable: !!this.llm && !!this._mod(room).claude,
+        hintSource: this.hinter && this._mod(room).claude ? 'claude' : 'classic',
+      },
       turnClock: room.turnClock && room.turnClock.endsAt > Date.now()
         ? { seat: room.turnClock.seat, endsIn: room.turnClock.endsAt - Date.now(), total: room.turnClock.total }
         : null,
       history: room.history,
-      game: room.game ? getView(room.game, seat) : null,
+      game: room.game ? room.gameMod.getView(room.game, seat) : null,
     };
   }
 
@@ -699,48 +777,30 @@ export class RoomManager {
 
   // ------------------------------------------------------------ game driving
 
-  _trickKey(game) {
-    const v = getView(game, null);
-    return `${v.handNumber}:${v.lastTrick ? v.lastTrick.index : '-'}`;
-  }
-
   _apply(room, seat, action) {
+    const mod = room.gameMod;
     let res;
     try {
-      res = applyAction(room.game, seat, action);
+      res = mod.applyAction(room.game, seat, action);
     } catch (err) {
       this.logger.error?.('[rooms] engine threw:', err);
       return { ok: false, error: 'Engine error' };
     }
     if (!res || !res.ok) return res || { ok: false, error: 'Illegal action' };
-    // Detect a completed trick → give everyone time to see it before bots act.
-    const key = this._trickKey(room.game);
-    if (key !== room.trickKey) {
-      const v = getView(room.game, null);
-      if (v.lastTrick) room.pauseUntil = Date.now() + this.opts.trickPause;
-      room.trickKey = key;
+    const view = mod.getView(room.game, null);
+    // A completed trick (28) → give everyone time to see it before bots act.
+    const key = mod.pauseKey(view);
+    if (key !== room.pauseKey) {
+      if (key !== null) room.pauseUntil = Date.now() + this.opts.trickPause;
+      room.pauseKey = key;
     }
-    this._recordHistory(room);
+    try {
+      mod.recordHistory(view, room, (s) => room.players.get(room.seats[s])?.name ?? `Seat ${s + 1}`);
+    } catch (err) {
+      this.logger.error?.('[rooms] history failed:', err);
+    }
     this._afterChange(room);
     return res;
-  }
-
-  _recordHistory(room) {
-    const v = getView(room.game, null);
-    if (v.phase !== 'handEnd' && v.phase !== 'matchEnd') return;
-    if (!v.handResult || room.recordedHand === v.handNumber && room.recordedGame === room.game) return;
-    room.recordedHand = v.handNumber;
-    room.recordedGame = room.game;
-    const r = v.handResult;
-    const name = (seat) => room.players.get(room.seats[seat])?.name ?? `Seat ${seat + 1}`;
-    room.history.hands.push({
-      hand: v.handNumber, dealer: v.dealer, bidder: r.bidder, bidderName: name(r.bidder), bid: r.bid,
-      trump: v.trump?.suit ?? null, made: r.made, teamPoints: r.teamPoints, delta: r.delta, scores: v.scores,
-    });
-    if (v.phase === 'matchEnd' && v.matchWinner != null) {
-      room.history.matches.push({ winner: v.matchWinner, scores: v.scores, hands: room.history.hands.length, endedAt: Date.now() });
-      room.history.series[v.matchWinner]++;
-    }
   }
 
   _isBotSeat(room, seat) {
@@ -756,15 +816,18 @@ export class RoomManager {
       return;
     }
     const game = room.game;
-    const view = getView(game, null);
+    const mod = room.gameMod;
+    const view = mod.getView(game, null);
     const seq = view.seq;
+    const turn = mod.currentTurn(game);
+    const hasTurn = turn !== null && turn !== undefined;
     let key = null;
-    if (view.phase === 'handEnd') key = `next:${seq}`;
-    else if (view.phase !== 'matchEnd') {
-      const turn = currentTurn(game);
-      if (turn !== null && turn !== undefined && this._isBotSeat(room, turn)) key = `bot:${seq}:${turn}`;
-      else if (turn !== null && turn !== undefined && room.settings.turnTimer > 0) key = `clock:${seq}:${turn}`;
+    if (mod.isBetween(view)) key = `next:${seq}`;
+    else if (!mod.isOver(view) && hasTurn) {
+      if (this._isBotSeat(room, turn)) key = `bot:${seq}:${turn}`;
+      else if (room.settings.turnTimer > 0) key = `clock:${seq}:${turn}`;
     }
+    if (!key || !key.startsWith('clock:') || room.lastClock?.seat !== turn || room.lastClock?.game !== game) room.lastClock = null;
     // Keep an already-pending timer for the same state (e.g. a spectator joining
     // shouldn't postpone the bot).
     if (key && key === room.timerKey && (room.botTimer || room.nextHandTimer)) return;
@@ -776,27 +839,41 @@ export class RoomManager {
     if (key.startsWith('next:')) {
       room.nextHandTimer = setTimeout(() => {
         room.nextHandTimer = null;
-        if (room.destroyed || room.game !== game || getView(game, null).seq !== seq) return; // stale
-        const seat = room.seats.findIndex((s) => s !== null);
-        this._apply(room, seat < 0 ? 0 : seat, { type: 'nextHand' });
+        if (room.destroyed || room.game !== game || mod.getView(game, null).seq !== seq) return; // stale
+        // Any seat may advance (28: nextHand; rummy: nextDeal, active seats only).
+        const action = { type: mod.nextAction };
+        for (let s = 0; s < room.seats.length; s++) {
+          if (room.seats[s] !== null && this._apply(room, s, action).ok) return;
+        }
+        this.logger.error?.(`[rooms] could not auto-advance room ${room.code}`);
       }, this.opts.nextHandDelay);
       return;
     }
 
-    const turn = currentTurn(game);
     if (key.startsWith('clock:')) {
       // Human turn clock: when it runs out the classic bot plays for them.
+      // Modules with clockPerTurn (rummy: draw + discard) keep one deadline for the whole turn.
       const total = room.settings.turnTimer * this.opts.turnTimerUnit;
-      const delay = Math.max(0, room.pauseUntil - Date.now()) + total;
-      room.turnClock = { seat: turn, endsAt: Date.now() + delay, total };
+      let endsAt = Date.now() + Math.max(0, room.pauseUntil - Date.now()) + total;
+      if (mod.clockPerTurn) {
+        if (room.lastClock) endsAt = room.lastClock.endsAt;
+        else room.lastClock = { seat: turn, game, endsAt };
+      }
+      const delay = Math.max(0, endsAt - Date.now());
+      room.turnClock = { seat: turn, endsAt, total };
       room.botTimer = setTimeout(() => {
         room.botTimer = null;
         room.turnClock = null;
         if (room.destroyed || room.game !== game) return;
-        if (getView(game, null).seq !== seq || currentTurn(game) !== turn || this._isBotSeat(room, turn)) return;
+        if (mod.getView(game, null).seq !== seq || mod.currentTurn(game) !== turn || this._isBotSeat(room, turn)) return;
         const p = room.players.get(room.seats[turn]);
         this._systemChat(room, `${p?.name ?? 'A player'} ran out of time — auto-played`);
         this._botActClassic(room, turn);
+        // Finish the whole turn (e.g. rummy discard after the draw).
+        for (let i = 0; mod.clockPerTurn && i < 4 && room.game === game && !room.destroyed; i++) {
+          if (mod.currentTurn(game) !== turn || this._isBotSeat(room, turn) || mod.isBetween(mod.getView(game, null))) break;
+          this._botActClassic(room, turn);
+        }
       }, delay);
       return;
     }
@@ -804,19 +881,20 @@ export class RoomManager {
     room.botTimer = setTimeout(() => {
       room.botTimer = null;
       if (room.destroyed || room.game !== game) return; // stale
-      if (getView(game, null).seq !== seq || currentTurn(game) !== turn || !this._isBotSeat(room, turn)) return;
+      if (mod.getView(game, null).seq !== seq || mod.currentTurn(game) !== turn || !this._isBotSeat(room, turn)) return;
       this._botAct(room, turn);
     }, delay);
   }
 
   _brain(room) {
-    return this.llm && room.settings.botBrain === 'claude' ? 'claude' : 'classic';
+    return this.llm && this._mod(room).claude && room.settings.botBrain === 'claude' ? 'claude' : 'classic';
   }
 
   _botAct(room, seat) {
     if (this._brain(room) !== 'claude') return this._botActClassic(room, seat);
     const game = room.game;
-    const view = getView(game, seat);
+    const mod = room.gameMod;
+    const view = mod.getView(game, seat);
     const key = room.timerKey;
     room.botThinking = key;
     const names = room.seats.map((pid) => room.players.get(pid)?.name);
@@ -829,7 +907,7 @@ export class RoomManager {
       .then((res) => {
         if (room.botThinking === key) room.botThinking = null;
         // Stale? (state moved on, room gone, or seat handed back to a human)
-        if (room.destroyed || room.game !== game || getView(game, null).seq !== view.seq || currentTurn(game) !== seat || !this._isBotSeat(room, seat)) {
+        if (room.destroyed || room.game !== game || mod.getView(game, null).seq !== view.seq || mod.currentTurn(game) !== seat || !this._isBotSeat(room, seat)) {
           if (!room.destroyed) this._schedule(room);
           return;
         }
@@ -851,10 +929,11 @@ export class RoomManager {
   }
 
   _botActClassic(room, seat) {
-    const view = getView(room.game, seat);
+    const mod = room.gameMod;
+    const view = mod.getView(room.game, seat);
     let action = null;
     try {
-      action = chooseAction(view);
+      action = mod.botAction(view);
     } catch (err) {
       this.logger.error?.('[rooms] bot threw:', err);
     }
@@ -864,23 +943,9 @@ export class RoomManager {
       this.logger.warn?.(`[rooms] bot action rejected (${res.error}):`, action);
     }
     // Fallback: any legal action so the game never stalls.
-    for (const a of fallbackActions(view)) {
+    for (const a of mod.fallbackActions(view)) {
       if (this._apply(room, seat, a).ok) return;
     }
     this.logger.error?.(`[rooms] bot at seat ${seat} in room ${room.code} could not act`);
   }
-}
-
-function fallbackActions(view) {
-  const l = view.legal || {};
-  const acts = l.actions || [];
-  const out = [];
-  if (acts.includes('chooseTrump') && l.trumpChoices?.length) out.push({ type: 'chooseTrump', card: l.trumpChoices[0] });
-  if (acts.includes('play') && l.playable?.length) out.push({ type: 'play', card: l.playable[0] });
-  if (acts.includes('pass')) out.push({ type: 'pass' });
-  if (acts.includes('bid') && l.minBid != null) out.push({ type: 'bid', value: l.minBid });
-  if (acts.includes('playTrumpCard')) out.push({ type: 'playTrumpCard' });
-  if (acts.includes('callTrump')) out.push({ type: 'callTrump' });
-  if (acts.includes('redeal')) out.push({ type: 'redeal' });
-  return out;
 }

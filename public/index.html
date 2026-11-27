@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#071d18">
-  <meta name="description" content="Play 28, the South Indian trick-taking card game, online with friends or bots.">
+  <meta name="description" content="Play 28, the South Indian trick-taking card game, or 13-card Indian Rummy online with friends or bots.">
   <title>28 · Twenty-Eight Online</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='10' y='4' width='44' height='56' rx='7' fill='%23fffaf0' stroke='%23e8c170' stroke-width='3'/%3E%3Ctext x='32' y='42' font-family='Georgia,serif' font-weight='700' font-size='26' text-anchor='middle' fill='%230f5a46'%3E28%3C/text%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -17,6 +17,7 @@
   <link rel="stylesheet" href="/css/voice.css">
   <link rel="stylesheet" href="/css/extras.css">
   <link rel="stylesheet" href="/css/score.css">
+  <link rel="stylesheet" href="/css/rummy.css">
 </head>
 <body>
   <div id="app">
@@ -28,7 +29,7 @@
         <header class="landing-hero">
           <div class="hero-mark" aria-hidden="true"><span>28</span></div>
           <h1 id="landing-title">Twenty-Eight</h1>
-          <p class="tagline">The classic South Indian trump game. Four players, two teams, one hidden trump.</p>
+          <p class="tagline">The classic South Indian trump game. Four players, two teams, one hidden trump. <span class="tagline-more">Or deal a hand of 13-card Rummy for 2–6.</span></p>
         </header>
         <form class="glass landing-panel" id="landing-form" novalidate>
           <label class="field">
@@ -59,6 +60,7 @@
 
     <section id="screen-lobby" class="screen" hidden aria-label="Lobby"></section>
     <section id="screen-game" class="screen" hidden aria-label="Game"></section>
+    <section id="screen-rummy" class="screen" hidden aria-label="Rummy"></section>
   </div>
 
   <div id="conn-pill" class="conn-pill" role="status" aria-live="polite" hidden></div>

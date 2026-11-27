@@ -1,4 +1,6 @@
 // 28 Online — app shell: wires Net (SPEC §4) to the UI screens.
+// Two game screens: #screen-game (28, ui/table.js) and #screen-rummy (Rummy,
+// ui/rummy/table.js), chosen by room.game.gameType.
 import { Net } from './net.js';
 import { Voice } from './voice.js';
 import { Sounds } from './sounds.js';
@@ -14,7 +16,8 @@ import { showRules, showHandEnd, hideHandEnd, showMatchEnd, hideMatchEnd, isOpen
 installSuitSprite();
 
 const NAME_KEY = '28.name';
-const screens = { landing: $('#screen-landing'), lobby: $('#screen-lobby'), game: $('#screen-game') };
+const screens = { landing: $('#screen-landing'), lobby: $('#screen-lobby'), game: $('#screen-game'), rummy: $('#screen-rummy') };
+const isGameScreen = (name) => name === 'game' || name === 'rummy';
 let current = 'landing';
 let net;
 
@@ -43,7 +46,7 @@ const ctx = {
   sounds,
   hint: () => call('hint'),
   react: (emoji) => call('react', emoji),
-  scoreboard: () => showScoreboard(net?.state),
+  scoreboard: () => { if (net?.state?.game?.gameType !== 'rummy') showScoreboard(net?.state); }, // rummy table shows its own
   act: (action) => call('action', action),
   start: () => call('start'),
   rules: () => showRules(),
@@ -59,11 +62,26 @@ const ctx = {
 
 initChat({
   send: (text) => call('chat', text),
-  onUnreadChange: (n) => table.setUnread(n),
+  onUnreadChange: (n) => { table.setUnread(n); rummyTable.setUnread(n); },
 });
 
 const lobby = mountLobby(screens.lobby, ctx);
 const table = mountTable(screens.game, ctx);
+const rummyTable = await loadRummyTable(screens.rummy, ctx);
+const activeTable = () => (current === 'rummy' ? rummyTable : table);
+
+/** Load the Rummy table; if it is missing or broken, 28 must keep working. */
+async function loadRummyTable(root, c) {
+  try {
+    const mod = await import('./ui/rummy/table.js');
+    return mod.mountRummyTable(root, c);
+  } catch (err) {
+    console.error('[app] Rummy table unavailable:', err);
+    root.innerHTML = '<div class="glass" style="margin:40px auto;max-width:420px;padding:24px;text-align:center"><h2>Rummy</h2><p class="muted">The Rummy table could not be loaded. Please reload the page.</p><button class="btn btn-ghost" type="button" data-act="leave">Leave</button></div>';
+    root.addEventListener('click', (e) => { if (e.target.closest('[data-act="leave"]')) c.leave(true); });
+    return { render() {}, whenIdle(fn) { fn(); }, setUnread() {}, reset() {}, say() {}, react() {}, chatVisible: () => false };
+  }
+}
 const voice = net ? new Voice(net) : null;
 const voiceUI = voice ? mountVoice(voice, () => net.state) : null;
 if (voice && new URLSearchParams(location.search).has('debug')) window.__voice = voice; // dev/testing hook
@@ -75,13 +93,14 @@ function show(name) {
   for (const [k, el] of Object.entries(screens)) el.hidden = k !== name;
   document.body.dataset.screen = name;
   window.scrollTo(0, 0); // don't carry the previous screen's scroll (e.g. landing on a short landscape phone)
-  if (name === 'game' && table.chatVisible()) markRead();
+  if (isGameScreen(name) && activeTable().chatVisible()) markRead();
 }
 
 function toLanding() {
   hideHandEnd();
   hideMatchEnd();
   table.reset();
+  rummyTable.reset();
   clearChat();
   setRoomParam(null);
   show('landing');
@@ -101,13 +120,23 @@ let matchShownSeq = null;
 function render(room) {
   if (!room) return toLanding();
   setRoomParam(room.code);
-  document.title = `28 · Room ${room.code}`;
+  const rummy = room.game ? room.game.gameType === 'rummy' : room.settings?.gameType === 'rummy';
+  document.title = `${rummy ? 'Rummy' : '28'} · Room ${room.code}`;
   if (room.status === 'lobby' || !room.game) {
     hideHandEnd();
     hideMatchEnd();
     matchShownSeq = null;
     lobby.render(room);
     show('lobby');
+    return;
+  }
+  if (room.game.gameType === 'rummy') {
+    // The rummy table owns its deal-end / match-end UI; 28 modals never open here.
+    hideHandEnd();
+    hideMatchEnd();
+    matchShownSeq = null;
+    show('rummy');
+    rummyTable.render(room);
     return;
   }
   show('game');
@@ -231,13 +260,13 @@ if (net) {
   net.on('state', () => voiceUI?.update()); // after render so seat elements exist
   net.on('state', (r) => sounds.update(r));
   net.on('reaction', (x) => {
-    if (current !== 'game') return;
-    table.react(x.seat, x.emoji, x.name);
+    if (!isGameScreen(current)) return;
+    activeTable().react(x.seat, x.emoji, x.name);
     sounds.play('pop');
   });
   net.on('chat', (m) => {
     addMessage(m);
-    if (m.bot && current === 'game') table.say(m.seat, m.text);
+    if (m.bot && isGameScreen(current)) activeTable().say(m.seat, m.text);
   });
   net.on('status', setStatus);
   const s = net.session;

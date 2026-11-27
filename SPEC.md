@@ -139,10 +139,10 @@ Client → server:
 | `room:leave` | `{}` | |
 | `room:sit` | `{ seat }` (empty seat, lobby only; moves you) | |
 | `room:stand` | `{}` (lobby only) | |
-| `room:addBot` | `{ seat }` host only | |
+| `room:addBot` | `{ seat }` host only (seat `0..seats.length-1`) | |
 | `room:kick` | `{ seat }` host only, removes bot or player from seat (lobby only) | |
-| `room:settings` | `{ targetScore }` host only, lobby | |
-| `room:start` | `{}` host only, needs 4 seats filled | |
+| `room:settings` | `{ targetScore?, gameType?, players?, poolLimit?, botBrain?, turnTimer?, hints? }` host only; `targetScore`/`gameType`/`players`/`poolLimit` lobby only (see §6) | |
+| `room:start` | `{}` host only, needs every seat filled (4 for 28, `players` for rummy) | |
 | `game:action` | action object (see engine) | |
 | `chat:send` | `{ text }` (max 200 chars) | |
 
@@ -155,14 +155,15 @@ RoomView:
 {
   code: "ABCD",               // 4 uppercase letters (no I/O)
   hostId, you: { playerId, seat: seat|null, isHost: bool },
-  seats: [ { playerId, name, isBot, connected } | null ] ×4,
+  seats: [ { playerId, name, isBot, connected } | null ],   // ×4 for 28, ×settings.players for rummy
   spectators: [ { playerId, name, connected } ],
   status: "lobby" | "playing",
-  settings: { targetScore },
-  game: GameView | null      // getView(game, you.seat)
+  gameType: "28" | "rummy",  // = settings.gameType (the game the lobby is set to / being played)
+  settings: { gameType, targetScore, players, poolLimit, botBrain, turnTimer, hints, claudeAvailable, hintSource },
+  game: GameView | null      // the active game module's getView(game, you.seat); game.gameType === "rummy" for rummy
 }
 ```
-Server behaviour: bots act ~800 ms after it becomes their turn (also callTrump then play). After a trick completes, server waits ~1.4 s before letting the next action be processed for bots (humans may act immediately; UI shows lastTrick). Auto `nextHand` after 8 s in handEnd. If a human disconnects mid-game their seat stays theirs (connected:false); after 60 s disconnected a bot takes over for them until they reconnect. Empty rooms are deleted after 10 min. Max 4 seats + any spectators. After matchEnd the host can `room:start` again (resets scores) — status returns to "lobby" on matchEnd is NOT required; `room:start` from "playing" with phase matchEnd restarts.
+Server behaviour: bots act ~800 ms after it becomes their turn (also callTrump then play). After a trick completes, server waits ~1.4 s before letting the next action be processed for bots (humans may act immediately; UI shows lastTrick). Auto `nextHand` after 8 s in handEnd. If a human disconnects mid-game their seat stays theirs (connected:false); after 60 s disconnected a bot takes over for them until they reconnect. Empty rooms are deleted after 10 min. Max 4 seats (28) or `players` seats (rummy, 2–6) + any spectators. After matchEnd the host can `room:start` again (resets scores) — status returns to "lobby" on matchEnd is NOT required; `room:start` from "playing" with phase matchEnd restarts.
 
 ## 4. Client networking module (`public/js/net.js`)
 
@@ -194,4 +195,37 @@ Share link format: `${location.origin}/?room=ABCD`. The UI reads the `room` quer
 - **Turn timer:** `settings.turnTimer` ∈ {0,20,30,45,60} seconds (default 45). `RoomView.turnClock = { seat, endsIn, total } | null` (ms). On expiry, the classic bot plays for the human, and a `chat:message` with `system: true` is posted.
 - **Hints:** `settings.hints` (default true) and `settings.hintSource: "claude"|"classic"`. `game:hint` → `{ action, label, reason, source }`, at most once per player per move. Its ack may arrive asynchronously.
 - **Reactions:** `room:react { emoji }` with emoji from 👍 😂 😮 😡 🔥 👏 🙏 😢, rate-limited to 4 per 4 s. It broadcasts `room:reaction { playerId, seat, name, emoji, ts }`.
-- **History:** `RoomView.history = { hands: [{hand, dealer, bidder, bidderName, bid, trump, made, teamPoints, delta, scores}], matches: [{winner, scores, hands, endedAt}], series: [n,n] }`. `hands` resets on each new match; `matches` and `series` persist for the room.
+- **History:** `RoomView.history = { hands: [{hand, dealer, bidder, bidderName, bid, trump, made, teamPoints, delta, scores}], matches: [{winner, scores, hands, endedAt}], series: [n,n] }` (28; rummy shape in §6). `hands` resets on each new match; `matches` and `series` persist for the room until the game type or player count changes.
+
+---
+
+## 6. Game types (platform layer, post-kickoff)
+
+Rooms are game-agnostic; each game is a **module** in `server/games/` (registry `server/games/index.js`):
+
+```js
+{
+  id: "28" | "rummy", name, nextAction: "nextHand" | "nextDeal",
+  actionFields: [..],                    // action keys forwarded from game:action besides `type`
+  clockPerTurn?: bool,                   // one turn-timer deadline covers all steps of a turn (rummy: draw + discard)
+  seatCount(settings) -> n,              // 28: 4, rummy: settings.players
+  createGame(settings, seats) -> game,   // seats = [0..n-1]
+  applyAction(game, seat, action), getView(game, seat|null), currentTurn(game),
+  isOver(view),                          // matchEnd → room behaves like a lobby (seats, settings, restart)
+  isBetween(view),                       // handEnd / dealEnd → room auto-sends nextAction after `nextHandDelay` (8 s)
+  botAction(view), fallbackActions(view),// classic bot + "any legal move" safety net
+  options(view) -> [{label, action}],    // legal choices (hint availability, Claude prompts)
+  isLegal(view, action), hintAction(view), describe(action, view) -> label,
+  pauseKey(view) -> string|null,         // 28: completed trick → bots pause `trickPause`; rummy: null
+  actionNotice(action, view, name) -> string|null,   // system chat line after a human action
+  newSeries(settings) -> [0..],          // history.series shape
+  recordHistory(view, room, nameOf),     // idempotent; appends to room.history
+  claude: { available, choose, hint } | null,        // Claude bots/coach (28 only)
+}
+```
+
+- **Settings:** `gameType: "28" | "rummy"` (default `"28"`), rummy `players` 2–6 (default 4) and `poolLimit` 101 | 201 (default 101). All are host-only and lobby-only (also allowed after matchEnd). `targetScore` and `botBrain` only affect 28; `turnTimer` and `hints` apply to both.
+- **Seat resizing:** changing `gameType` or `players` resizes `seats` to the new count. Bots in removed seats are removed; humans in removed seats move to the lowest free seat, or become spectators if none is free. A finished game is discarded (status back to `"lobby"`), and `history` is reset (its shape depends on the table).
+- **Rummy specifics:** bots act `botDelay` after each step (draw, then discard). The turn timer covers the whole turn; on expiry the classic rummy bot draws *and* discards (one "ran out of time" notice). Hints come from the classic rummy bot (`source: "classic"`); `label` is e.g. `"Draw from the closed deck"`, `"Pick up 7 of Hearts from the open pile"`, `"Discard King of Spades"`, `"Declare — finish with …"`, `"Drop out of this deal (20 points)"`. `nextDeal` is sent automatically 8 s after `dealEnd` by the first non-eliminated seat. `drop` posts a system chat line. `settings.claudeAvailable` is false and seats' `ai` is `"classic"` for rummy.
+- **History for rummy:** `hands` holds one row per deal: `{ deal, dealer, declarer, declarerName, valid, wrongShow, winner, winnerName, points: {seat: n}, scores: {seat: total}, eliminated: [seats] }`; `matches` rows are `{ winner: seat, winnerName, winnerId, scores, hands, endedAt }`; `series` counts match wins **per seat** (array of length `players`), reset whenever the game type or player count changes.
+

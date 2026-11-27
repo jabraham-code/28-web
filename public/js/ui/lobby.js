@@ -1,9 +1,23 @@
-// Lobby screen: room code + share, table diagram with seats, host controls, spectators, chat.
+// Lobby screen: room code + share, game picker (28 / Rummy), table diagram with
+// seats (4 for 28, 2–6 around an ellipse for Rummy), host controls, spectators, chat.
 import { h, $, esc, initials, teamOf, botBadge, SPARKLE } from './util.js';
 import { mountChat } from './chat.js';
 import { toast } from './toast.js';
 
 const TARGETS = [3, 5, 7, 10];
+const PLAYER_COUNTS = [2, 3, 4, 5, 6];
+const POOLS = [101, 201];
+const GAMES = {
+  '28': { name: '28', title: 'Twenty-Eight', blurb: 'Hidden-trump trick-taking for two teams of two.', mark: '28' },
+  rummy: { name: 'Rummy', title: 'Rummy', blurb: '13-card Indian Rummy, pool format, for 2–6 players.', mark: 'R' },
+};
+const POS28 = ['bottom', 'right', 'top', 'left'];
+
+/** Seat centre (percent of the table box) on an ellipse; seat 0 at the bottom, seat+1 to its right (like 28). */
+export function ellipsePos(i, n) {
+  const a = Math.PI / 2 - (i * 2 * Math.PI) / n;
+  return { x: 50 + 39 * Math.cos(a), y: 50 + 38 * Math.sin(a) };
+}
 
 export function mountLobby(root, ctx) {
   root.innerHTML = `
@@ -26,17 +40,41 @@ export function mountLobby(root, ctx) {
             <button class="btn btn-ghost btn-sm share-native" type="button" data-act="share" hidden>Share</button>
           </div>
         </div>
+        <div class="game-pick" role="radiogroup" aria-labelledby="game-pick-label">
+          <span class="eyebrow" id="game-pick-label">Game</span>
+          <div class="game-cards">
+            ${Object.entries(GAMES).map(([id, g]) => `
+              <button type="button" role="radio" class="game-card" data-game="${id}">
+                <span class="gc-mark gc-${id}" aria-hidden="true">${g.mark}</span>
+                <span class="gc-text"><span class="gc-title">${g.title}</span><span class="gc-blurb">${g.blurb}</span></span>
+                <span class="gc-check" aria-hidden="true"></span>
+              </button>`).join('')}
+          </div>
+          <p class="gp-hint muted"></p>
+        </div>
         <div class="lobby-table-wrap">
           <div class="lobby-table" role="group" aria-label="Seats">
             <div class="lt-felt"><div class="lt-center">
-              <div class="lt-teams"><span class="team-dot t0"></span>Seats 1 &amp; 3 <span class="muted">vs</span> <span class="team-dot t1"></span>Seats 2 &amp; 4</div>
+              <div class="lt-teams"></div>
               <div class="lt-hint muted"></div>
             </div></div>
-            ${[0, 1, 2, 3].map((s) => `<div class="lt-seat lt-pos-${['bottom', 'right', 'top', 'left'][s]} t${s % 2}" data-seat="${s}"></div>`).join('')}
           </div>
         </div>
         <div class="lobby-controls">
-          <div class="setting">
+          <div class="setting rummy-only players-setting">
+            <span class="eyebrow" id="players-label">Players</span>
+            <div class="segmented" role="radiogroup" aria-labelledby="players-label">
+              ${PLAYER_COUNTS.map((n) => `<button type="button" role="radio" class="seg" data-players="${n}">${n}</button>`).join('')}
+            </div>
+          </div>
+          <div class="setting rummy-only pool-setting">
+            <span class="eyebrow" id="pool-label">Pool</span>
+            <div class="segmented" role="radiogroup" aria-labelledby="pool-label" aria-describedby="pool-hint">
+              ${POOLS.map((n) => `<button type="button" role="radio" class="seg" data-pool="${n}">${n}</button>`).join('')}
+            </div>
+            <p class="sp-hint muted" id="pool-hint"></p>
+          </div>
+          <div class="setting only-28 target-setting">
             <span class="eyebrow" id="target-label">Starting points</span>
             <div class="segmented" role="radiogroup" aria-labelledby="target-label" aria-describedby="target-hint">
               ${TARGETS.map((t) => `<button type="button" role="radio" class="seg" data-target="${t}">${t}</button>`).join('')}
@@ -46,7 +84,7 @@ export function mountLobby(root, ctx) {
               <p class="sp-hint muted" id="target-hint"></p>
             </div>
           </div>
-          <div class="setting brain-setting">
+          <div class="setting only-28 brain-setting">
             <span class="eyebrow" id="brain-label">Bots</span>
             <div class="segmented brain-seg" role="radiogroup" aria-labelledby="brain-label">
               <button type="button" role="radio" class="seg" data-brain="claude">${SPARKLE}<span>Claude AI</span></button>
@@ -99,6 +137,9 @@ export function mountLobby(root, ctx) {
     const b = e.target.closest('button');
     if (!b || b.disabled) return;
     const act = b.dataset.act;
+    if (b.dataset.game) return b.dataset.game === room?.settings.gameType ? undefined : ctx.call('setSettings', { gameType: b.dataset.game });
+    if (b.dataset.players) return ctx.call('setSettings', { players: Number(b.dataset.players) });
+    if (b.dataset.pool) return ctx.call('setSettings', { poolLimit: Number(b.dataset.pool) });
     if (b.dataset.target) return ctx.call('setSettings', { targetScore: Number(b.dataset.target) });
     if (b.dataset.brain) return ctx.call('setSettings', { botBrain: b.dataset.brain });
     if (b.dataset.timer) return ctx.call('setSettings', { turnTimer: Number(b.dataset.timer) });
@@ -141,7 +182,7 @@ export function mountLobby(root, ctx) {
         room = { ...room, seats: room.seats.map((p, i) => (i === free ? { playerId: room.you.playerId } : p)), you: { ...room.you, seat: free } };
       }
     }
-    for (let s = 0; s < 4; s++) {
+    for (let s = 0; s < room.seats.length; s++) {
       if (room.seats[s]) continue;
       const r = await ctx.call('addBot', s);
       if (r?.ok === false) return false;
@@ -164,7 +205,7 @@ export function mountLobby(root, ctx) {
     const isHostSeat = p.playerId === r.hostId;
     return `${label}
       <div class="lt-player${me ? ' me' : ''}${p.connected === false ? ' offline' : ''}">
-        <div class="avatar t${teamOf(s)}${p.ai === 'claude' ? ' claude' : ''}">${p.isBot ? botIcon() : esc(initials(p.name))}</div>
+        <div class="avatar ${isRummy(r) ? 'tn' : `t${teamOf(s)}`}${p.ai === 'claude' ? ' claude' : ''}">${p.isBot ? botIcon() : esc(initials(p.name))}</div>
         <div class="lt-name">${esc(p.name)}</div>
         <div class="lt-tags">
           ${me ? '<span class="tag tag-you">You</span>' : ''}
@@ -176,15 +217,50 @@ export function mountLobby(root, ctx) {
       </div>`;
   }
 
+  const isRummy = (r) => r.settings.gameType === 'rummy';
+  const tableEl = $('.lobby-table', root);
+  let shape = null;
+
+  /** (Re)build the seat elements when the game type / seat count changes. */
+  function buildSeats(r) {
+    const n = r.seats.length;
+    const key = `${r.settings.gameType}:${n}`;
+    if (key === shape) return;
+    shape = key;
+    tableEl.querySelectorAll('.lt-seat').forEach((el) => el.remove());
+    const rummy = isRummy(r);
+    tableEl.classList.toggle('rummy', rummy);
+    tableEl.dataset.n = String(n);
+    for (let s = 0; s < n; s++) {
+      const el = document.createElement('div');
+      el.dataset.seat = String(s);
+      if (rummy) {
+        const { x, y } = ellipsePos(s, n);
+        el.className = 'lt-seat lt-ring';
+        el.style.setProperty('--x', `${x.toFixed(2)}%`);
+        el.style.setProperty('--y', `${y.toFixed(2)}%`);
+      } else el.className = `lt-seat lt-pos-${POS28[s]} t${s % 2}`;
+      tableEl.append(el);
+    }
+    if (!rummy) $('.lt-teams', root).innerHTML = '<span class="team-dot t0"></span>Seats 1 &amp; 3 <span class="muted">vs</span> <span class="team-dot t1"></span>Seats 2 &amp; 4';
+  }
+
   function render(r) {
     room = r;
+    buildSeats(r);
+    const rummy = isRummy(r);
+    const nSeats = r.seats.length;
+    root.querySelector('.lobby-main').dataset.game = r.settings.gameType;
+    root.querySelectorAll('.rummy-only').forEach((el) => (el.hidden = !rummy));
+    root.querySelectorAll('.only-28').forEach((el) => (el.hidden = rummy));
+    if (rummy) $('.lt-teams', root).textContent = `${nSeats} players \u00b7 pool ${r.settings.poolLimit}`;
     const codeEl = $('.room-code', root);
     if (codeEl.dataset.code !== r.code) {
       codeEl.dataset.code = r.code;
       codeEl.innerHTML = r.code.split('').map((c) => `<span>${c}</span>`).join('');
       codeEl.setAttribute('aria-label', `Room code ${r.code.split('').join(' ')}`);
     }
-    for (let s = 0; s < 4; s++) {
+    for (let s = 0; s < nSeats; s++) {
       const el = root.querySelector(`.lt-seat[data-seat="${s}"]`);
       const html = seatHTML(r, s);
       if (el.dataset.html !== html) { el.dataset.html = html; el.innerHTML = html; }
@@ -201,6 +277,19 @@ export function mountLobby(root, ctx) {
     });
     segOn('.seg[data-timer]', (b) => Number(b.dataset.timer) === (r.settings.turnTimer ?? 0));
     segOn('.seg[data-hints]', (b) => (b.dataset.hints === 'on') === !!r.settings.hints);
+    segOn('.seg[data-players]', (b) => Number(b.dataset.players) === r.settings.players);
+    segOn('.seg[data-pool]', (b) => Number(b.dataset.pool) === r.settings.poolLimit);
+    $('#pool-hint', root).textContent = `Points add up every deal \u2014 reach ${r.settings.poolLimit ?? 101} and you\u2019re out. Last player standing wins.`;
+    root.querySelectorAll('.game-card').forEach((b) => {
+      const on = b.dataset.game === r.settings.gameType;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-checked', String(on));
+      b.disabled = !host && !on;
+      b.classList.toggle('readonly', !host);
+      b.tabIndex = host || on ? 0 : -1;
+    });
+    $('.game-pick', root).classList.toggle('readonly', !host);
+    $('.gp-hint', root).textContent = host ? '' : `${GAMES[r.settings.gameType]?.title || 'This game'} \u2014 the host picks the game.`;
     root.querySelectorAll('.seg[data-target]').forEach((b) => {
       const on = Number(b.dataset.target) === r.settings.targetScore;
       b.classList.toggle('on', on);
@@ -210,7 +299,7 @@ export function mountLobby(root, ctx) {
     const sp = r.settings.targetScore;
     root.querySelectorAll('.sp-n').forEach((n) => (n.textContent = sp));
     root.querySelector('.sp-bar').style.setProperty('--n', sp * 2);
-    $('.sp-hint', root).textContent = `Both teams start with ${sp}. Points move between teams after every hand \u2014 drop below 0 and you lose.`;
+    $('#target-hint', root).textContent = `Both teams start with ${sp}. Points move between teams after every hand \u2014 drop below 0 and you lose.`;
     root.querySelector('.lobby-main').classList.toggle('is-host', host);
     const avail = !!r.settings.claudeAvailable;
     const brain = r.settings.botBrain || 'classic';
@@ -227,15 +316,15 @@ export function mountLobby(root, ctx) {
       : brain === 'claude' ? 'Bots think with Claude and may chat at the table. Moves can take a few seconds.' : 'Fast rule-based bots.';
     const start = $('[data-act="start"]', root);
     start.hidden = !host;
-    const empty = 4 - filled;
+    const empty = nSeats - filled;
     start.textContent = empty ? `Start with ${empty} bot${empty > 1 ? 's' : ''}` : 'Start game';
-    $('[data-act="fill"]', root).hidden = !host || filled === 4;
+    $('[data-act="fill"]', root).hidden = !host || filled === nSeats;
     $('[data-act="stand"]', root).hidden = r.you.seat == null;
     const hostName = r.seats.find((p) => p?.playerId === r.hostId)?.name || r.spectators.find((p) => p.playerId === r.hostId)?.name || 'the host';
     $('.start-hint', root).textContent = host
-      ? filled < 4 ? `${4 - filled} empty seat${filled === 3 ? '' : 's'} \u2014 invite friends with the link, or let bots fill in.` : 'Everyone is seated. Deal them in!'
-      : filled < 4 ? `Waiting for players… (${filled}/4 seated)` : `Waiting for ${hostName} to start the game…`;
-    $('.lt-hint', root).textContent = r.you.seat == null ? 'Pick an empty seat to join a team' : `You are in seat ${r.you.seat + 1}`;
+      ? empty ? `${empty} empty seat${empty === 1 ? '' : 's'} \u2014 invite friends with the link, or let bots fill in.` : 'Everyone is seated. Deal them in!'
+      : empty ? `Waiting for players… (${filled}/${nSeats} seated)` : `Waiting for ${hostName} to start the game…`;
+    $('.lt-hint', root).textContent = r.you.seat == null ? (rummy ? 'Pick an empty seat to join' : 'Pick an empty seat to join a team') : `You are in seat ${r.you.seat + 1}`;
     const specs = r.spectators || [];
     $('.spec-count', root).textContent = specs.length ? `(${specs.length})` : '';
     const list = $('.spec-list', root);

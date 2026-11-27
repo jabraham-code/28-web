@@ -128,13 +128,14 @@ export function mountVoice(voice, getRoom) {
   function paintSeats(r) {
     if (!r) return;
     const me = r.you?.playerId;
-    for (let seat = 0; seat < 4; seat++) {
+    for (let seat = 0; seat < Math.max(4, r.seats?.length || 0); seat++) {
       const p = r.seats[seat];
       const inVoice = !!p?.voice;
       const talking = inVoice && voice.speaking.has(p.playerId === me ? 'me' : p.playerId);
       const targets = [
         document.querySelector(`#screen-game .seat[data-seat="${seat}"] .plate`),
         document.querySelector(`#screen-lobby .lt-seat[data-seat="${seat}"]`),
+        document.querySelector(`#screen-rummy .r-seat[data-seat="${seat}"] .r-plate`), // rummy table (2–6 seats)
       ];
       for (const el of targets) {
         if (!el) continue;

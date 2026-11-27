@@ -1,5 +1,6 @@
 // Sound effects (synthesised with WebAudio, no assets) and haptics.
-// Watches RoomView updates and plays cues for deals, plays, tricks, turns, etc.
+// Watches RoomView updates and plays cues for deals, plays, tricks, turns, etc. (28 only;
+// the Rummy table calls sounds.play(name) itself). Turn-clock warnings apply to every game.
 
 const KEY = '28.sound';
 
@@ -97,8 +98,9 @@ export class Sounds {
     const g = room?.game;
     const p = this.prev;
     this.prev = g ? { g, seat: room.you.seat } : null;
-    this._clock(room);
-    if (!g || !p || p.seat !== room.you.seat) return;
+    this._clock(room); // turn-clock warnings are game-agnostic
+    // The cues below read 28 views; other games (rummy) call play() themselves.
+    if (!g || g.gameType === 'rummy' || !p || p.g.gameType === 'rummy' || p.seat !== room.you.seat) return;
     const pg = p.g;
     if (pg.seq === g.seq && pg.handNumber === g.handNumber) return;
     const me = room.you.seat;

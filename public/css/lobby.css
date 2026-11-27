@@ -196,3 +196,72 @@
   .start-hint { text-align: left; font-size: .76rem; }
   .lobby-buttons .btn-lg { --bh: 44px; }
 }
+
+/* ---------------------------------------------------------------- game picker (28 / Rummy) */
+.game-pick { display: grid; gap: 8px; }
+.game-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.game-card {
+  position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 12px;
+  padding: 12px 40px 12px 12px; border-radius: 16px; text-align: left; color: var(--ink); cursor: pointer; font: inherit;
+  background: rgba(0, 0, 0, .22); border: 1.5px solid var(--line); transition: border-color .2s, background .2s, box-shadow .2s, opacity .2s;
+}
+.game-card:hover:not(:disabled):not(.on) { border-color: rgba(232, 193, 112, .45); background: rgba(232, 193, 112, .05); }
+.game-card.on { border-color: var(--gold); background: linear-gradient(180deg, rgba(232, 193, 112, .16), rgba(232, 193, 112, .05)); box-shadow: 0 0 0 1px rgba(232, 193, 112, .3), 0 10px 26px rgba(0, 0, 0, .3); }
+.game-card:disabled { cursor: default; opacity: .4; }
+.game-card.readonly { cursor: default; }
+.gc-mark {
+  display: grid; place-items: center; width: 46px; height: 58px; border-radius: 9px; flex: none;
+  font-family: var(--serif); font-weight: 800; font-size: 1.35rem; color: #0f5a46;
+  background: #fffaf0; border: 2px solid var(--gold); box-shadow: 0 4px 12px rgba(0, 0, 0, .35); transform: rotate(-4deg);
+}
+.gc-mark.gc-rummy { color: #b3342a; transform: rotate(4deg); box-shadow: -5px 3px 0 -1px #f3e9d3, -5px 3px 0 1px rgba(232, 193, 112, .6), 0 4px 12px rgba(0, 0, 0, .35); }
+.gc-text { display: grid; gap: 2px; min-width: 0; }
+.gc-title { font-family: var(--serif); font-weight: 700; font-size: 1.12rem; }
+.gc-blurb { font-size: .78rem; line-height: 1.35; color: var(--ink-2); }
+.gc-check { position: absolute; top: 50%; right: 12px; width: 20px; height: 20px; margin-top: -10px; border-radius: 50%; border: 2px solid var(--line); }
+.game-card.on .gc-check { border-color: var(--gold); background: radial-gradient(circle, var(--gold-hi) 0 45%, transparent 50%); }
+.gp-hint { margin: 0; font-size: .78rem; }
+.gp-hint:empty { display: none; }
+.game-pick.readonly .game-card:not(.on) { display: none; }      /* guests see just the chosen game */
+.game-pick.readonly .game-cards { grid-template-columns: minmax(0, 1fr); }
+.game-pick.readonly .gc-check { display: none; }
+.game-pick.readonly .game-card { padding-right: 12px; }
+.setting[hidden] { display: none; }
+
+/* ---------------------------------------------------------------- rummy seats around an ellipse */
+.avatar.tn { background-color: #6b5a33; }
+.lobby-table.rummy .lt-felt { inset: 27% 25%; }
+.lt-seat.lt-ring { left: var(--x); top: var(--y); right: auto; bottom: auto; transform: translate(-50%, -50%); width: 23%; }
+.lobby-table.rummy[data-n="5"] .lt-ring, .lobby-table.rummy[data-n="6"] .lt-ring { width: 21%; }
+.lobby-table.rummy .lt-empty, .lobby-table.rummy .lt-player { min-height: 78px; }
+
+@media (max-width: 560px) {
+  .game-cards { gap: 8px; }
+  .game-card { grid-template-columns: minmax(0, 1fr); justify-items: start; gap: 6px; padding: 10px 30px 10px 10px; }
+  .gc-mark { width: 30px; height: 38px; font-size: .95rem; border-radius: 6px; }
+  .gc-title { font-size: 1rem; }
+  .gc-blurb { font-size: .72rem; }
+  .gc-check { top: 12px; margin-top: 0; right: 10px; width: 16px; height: 16px; }
+  .game-pick.readonly .game-card { grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 10px; }
+  .lobby-table.rummy { aspect-ratio: .95; }
+  .lobby-table.rummy .lt-felt { inset: 30% 30%; }
+  .lt-seat.lt-ring { width: 31%; }
+  .lobby-table.rummy[data-n="5"] .lt-ring, .lobby-table.rummy[data-n="6"] .lt-ring { width: 30%; }
+  .lobby-table.rummy .lt-empty, .lobby-table.rummy .lt-player { min-height: 0; }
+}
+
+@media (max-height: 560px) and (orientation: landscape) {
+  .lobby-main { grid-template-areas: "table code" "table pick" "table controls" "cta cta"; }
+  .game-pick { grid-area: pick; }
+  .game-card { padding: 8px 30px 8px 8px; gap: 8px; }
+  .gc-mark { width: 30px; height: 38px; font-size: .95rem; border-radius: 6px; }
+  .gc-title { font-size: .95rem; }
+  .gc-blurb { font-size: .7rem; }
+  .gc-check { right: 8px; width: 16px; height: 16px; margin-top: -8px; }
+  /* rummy keeps the ellipse (the 28 cross grid only fits 4 seats) */
+  .lobby-table.rummy { display: block; aspect-ratio: 1.35; }
+  .lobby-table.rummy .lt-felt { position: absolute; inset: 30% 30%; aspect-ratio: auto; }
+  .lobby-table.rummy .lt-seat.lt-ring { position: absolute; left: var(--x); top: var(--y); transform: translate(-50%, -50%); width: 31%; }
+  .lobby-table.rummy[data-n="5"] .lt-seat.lt-ring, .lobby-table.rummy[data-n="6"] .lt-seat.lt-ring { width: 29%; }
+  .lobby-table.rummy .lt-empty, .lobby-table.rummy .lt-player { min-height: 0; }
+}
