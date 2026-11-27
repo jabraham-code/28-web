@@ -34,7 +34,7 @@ Do not edit files you don't own. If a contract seems wrong, follow it anyway and
 
 ### Deal 2 & bidding round 2 (`phase: "bidding2"`)
 - Deal 4 more cards each (bidder ends with 7 in hand + 1 concealed).
-- One more auction starting at `firstSeat`; any player may raise, minimum `max(24, currentBid + 1)`, or pass. Again one turn each (four turns); if all 4 pass, the round-1 contract stands. Partner rule does not apply in round 2.
+- One more auction starting at `firstSeat`; any player may raise, only the values **20 (Honors), 24 (Senior) or 28 (Full)** that exceed `currentBid` (`legal.bidValues` lists the allowed values; `legal.minBid` is the smallest), or pass. Again one turn each (four turns); if all 4 pass, the round-1 contract stands. Partner rule does not apply in round 2.
 - If a *different* player wins round 2: old concealed card returns to old bidder's hand; new bidder enters `phase: "chooseTrump"` again and picks a concealed card from their 8 cards. If the same bidder raises, they keep their trump card.
 - After all 8 cards dealt, if any player holds all four Jacks → automatic redeal (same dealer). Check after deal 2 (before bidding2).
 

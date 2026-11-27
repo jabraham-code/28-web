@@ -218,14 +218,14 @@ test('round 2: all pass keeps contract; trump hidden from others', () => {
   assert.deepEqual(getView(game, 0).handCounts, [7, 8, 8, 8]);
 });
 
-test('round 2: min 24, new bidder re-selects trump, old card returns', () => {
+test('round 2: new bidder re-selects trump, old card returns', () => {
   const game = createGame({ dealer: 3, decks: [SCENARIO], rng: mulberry32(4) });
   act(game, 0, { type: 'bid', value: 14 });
   for (const s of [1, 2, 3]) act(game, s, { type: 'pass' });
   act(game, 0, { type: 'chooseTrump', card: '7H' });
-  assert.equal(getView(game, 0).legal.minBid, 24);
+  assert.equal(getView(game, 0).legal.minBid, 20);
   act(game, 0, { type: 'pass' });
-  reject(game, 1, { type: 'bid', value: 23 }, /at least 24/);
+  reject(game, 1, { type: 'bid', value: 19 }, /at least 20/);
   act(game, 1, { type: 'bid', value: 24 });
   act(game, 2, { type: 'pass' });
   act(game, 3, { type: 'pass' });
@@ -243,15 +243,38 @@ test('round 2: min 24, new bidder re-selects trump, old card returns', () => {
   assert.equal(currentTurn(game), 0);
 });
 
+test('round 2 allows only 20, 24 or 28 above the current bid', () => {
+  const g = createGame({ dealer: 3, decks: [SCENARIO], rng: mulberry32(4) });
+  act(g, 0, { type: 'bid', value: 16 });
+  for (const s of [1, 2, 3]) act(g, s, { type: 'pass' });
+  act(g, 0, { type: 'chooseTrump', card: '7H' });
+  assert.equal(g.phase, 'bidding2');
+  assert.deepEqual(getView(g, 0).legal.bidValues, [20, 24, 28]);
+  act(g, 0, { type: 'pass' });
+  reject(g, 1, { type: 'bid', value: 21 }, /only bid 20, 24 or 28/);
+  act(g, 1, { type: 'bid', value: 20 });
+  assert.equal(getView(g, 2).legal.minBid, 24);
+  assert.deepEqual(getView(g, 2).legal.bidValues, [24, 28]);
+  reject(g, 2, { type: 'bid', value: 25 }, /only bid 20, 24 or 28/);
+  act(g, 2, { type: 'bid', value: 24 });
+  assert.deepEqual(getView(g, 3).legal.bidValues, [28]);
+
+  const g2 = createGame({ dealer: 3, decks: [SCENARIO], rng: mulberry32(4) });
+  act(g2, 0, { type: 'bid', value: 22 });
+  for (const s of [1, 2, 3]) act(g2, s, { type: 'pass' });
+  act(g2, 0, { type: 'chooseTrump', card: '7H' });
+  assert.deepEqual(getView(g2, 0).legal.bidValues, [24, 28], 'first-round 22 -> 24 or 28');
+});
+
 test('round 2: same bidder raising keeps trump card', () => {
   const game = createGame({ dealer: 3, decks: [SCENARIO], rng: mulberry32(4) });
   act(game, 0, { type: 'bid', value: 14 });
   for (const s of [1, 2, 3]) act(game, s, { type: 'pass' });
   act(game, 0, { type: 'chooseTrump', card: '7H' });
-  act(game, 0, { type: 'bid', value: 25 });
+  act(game, 0, { type: 'bid', value: 24 });
   for (const s of [1, 2, 3]) act(game, s, { type: 'pass' });
   assert.equal(game.phase, 'playing');
-  assert.deepEqual(game.contract, { bid: 25, bidder: 0 });
+  assert.deepEqual(game.contract, { bid: 24, bidder: 0 });
   assert.equal(game.trump.card, '7H');
 });
 

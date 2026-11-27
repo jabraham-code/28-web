@@ -21,7 +21,7 @@ function isLegal(view, a) {
   const L = view.legal;
   if (!a || !L.actions.includes(a.type)) return false;
   switch (a.type) {
-    case 'bid': return Number.isInteger(a.value) && L.minBid != null && a.value >= L.minBid && a.value <= L.maxBid;
+    case 'bid': return Number.isInteger(a.value) && L.minBid != null && (L.bidValues?.length ? L.bidValues.includes(a.value) : a.value >= L.minBid && a.value <= L.maxBid);
     case 'play': return L.playable.includes(a.card);
     case 'chooseTrump': return L.trumpChoices.includes(a.card);
     default: return true;

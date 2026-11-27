@@ -2,6 +2,11 @@
 import { h, esc, seatName, teamOf, partnerOf, SUIT_NAMES, suitOf } from './util.js';
 import { createCard, suitIcon } from './cards.js';
 
+// Second-round bids and their names.
+const ROUND2_BIDS = [20, 24, 28];
+const BID_NAMES = { 20: 'Honors', 24: 'Senior', 28: 'Full' };
+const STAKES = (v) => (v >= 25 ? 'win +3 · lose −4' : v >= 20 ? 'win +2 · lose −3' : 'win +1 · lose −2');
+
 export function renderBidding(panel, room, ctx) {
   const g = room.game;
   const me = room.you.seat;
@@ -47,7 +52,7 @@ export function renderBidding(panel, room, ctx) {
   const round = b.round || (g.phase === 'bidding2' ? 2 : 1);
   const head = h('div', { class: 'bp-head' },
     h('span', { class: `bp-round r${round}` }, round === 1 ? 'Bidding · Round 1' : 'Bidding · Round 2'),
-    h('span', { class: 'bp-min muted' }, round === 1 ? 'min 14' : 'min 24'),
+    h('span', { class: 'bp-min muted' }, round === 1 ? 'min 14' : 'Honors · Senior · Full'),
   );
   const cur = h('div', { class: 'bp-current' });
   if (b.currentBid != null) {
@@ -83,15 +88,22 @@ export function renderBidding(panel, room, ctx) {
       const stakes = h('span', { class: 'step-stakes muted' });
       let trump = null;
       const bidBtn = h('button', { class: 'btn btn-gold', type: 'button', 'data-hint': 'bid', onclick: () => ctx.act(trump ? { type: 'bid', value, trump } : { type: 'bid', value }) });
-      const label = () => { bidBtn.innerHTML = `Bid ${value}${trump ? ` · ${suitIcon(suitOf(trump))}` : ''}`; };
+      const label = () => { bidBtn.innerHTML = `Bid ${value}${round === 2 && BID_NAMES[value] ? ` · ${BID_NAMES[value]}` : ''}${trump ? ` · ${suitIcon(suitOf(trump))}` : ''}`; };
+      let onSet = null;
+      // Allowed values (round 2 only allows 20 / 24 / 28): + and − jump between them.
+      const values = g.legal.bidValues?.length ? g.legal.bidValues : Array.from({ length: max - min + 1 }, (_, i) => min + i);
       const set = (v) => {
-        value = Math.min(max, Math.max(min, v));
+        if (v > value) v = values.find((x) => x >= v) ?? values[values.length - 1];
+        else if (v < value) v = [...values].reverse().find((x) => x <= v) ?? values[0];
+        else v = values.includes(v) ? v : values[0];
+        value = v;
         num.textContent = String(value);
         num.classList.toggle('hi', value >= 20);
         num.classList.toggle('top', value >= 25);
         stakes.textContent = value >= 25 ? 'win +3 · lose −4' : value >= 20 ? 'win +2 · lose −3' : 'win +1 · lose −2';
-        minus.disabled = value <= min;
-        plus.disabled = value >= max;
+        minus.disabled = value <= values[0];
+        plus.disabled = value >= values[values.length - 1];
+        onSet?.();
         label();
       };
       // press-and-hold repeats
@@ -112,7 +124,20 @@ export function renderBidding(panel, room, ctx) {
         if (e.key === 'ArrowUp' || e.key === 'ArrowRight') { e.preventDefault(); set(value + 1); }
         if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') { e.preventDefault(); set(value - 1); }
       });
-      stepper.append(minus, h('div', { class: 'step-num' }, num, stakes), plus);
+      if (round === 2) {
+        // Second round: three named bids instead of a stepper.
+        stepper.classList.add('r2-options');
+        stepper.setAttribute('role', 'radiogroup');
+        const opts = ROUND2_BIDS.map((v) => {
+          const ok = values.includes(v);
+          const btn = h('button', { class: `r2-opt v${v}`, type: 'button', role: 'radio', 'aria-checked': 'false', disabled: ok ? null : '', 'data-value': String(v), title: ok ? `Bid ${v} (${BID_NAMES[v]}) — ${STAKES(v)}` : `Not available: the bid is already ${b.currentBid}` },
+            h('b', {}, String(v)), h('span', { class: 'r2-name' }, BID_NAMES[v]), h('small', {}, STAKES(v)));
+          if (ok) btn.addEventListener('click', () => set(v));
+          return btn;
+        });
+        onSet = () => opts.forEach((o) => { const on = Number(o.dataset.value) === value; o.classList.toggle('on', on); o.setAttribute('aria-checked', String(on)); });
+        stepper.append(...opts);
+      } else stepper.append(minus, h('div', { class: 'step-num' }, num, stakes), plus);
       set(min);
       panel._setBid = set;
       row.append(bidBtn);
@@ -146,7 +171,7 @@ export function renderBidding(panel, room, ctx) {
     if (round === 1 && !acts.includes('pass') && acts.includes('bid')) hint = 'You open the bidding and must bid.';
     if (acts.includes('redeal')) hint = 'No point cards — you may ask for a redeal.';
     if (round === 1 && b.bidder != null && b.bidder === partnerOf(me) && min >= 18 && b.currentBid < 17) hint = 'Partner holds the bid — you need 18+ to overbid.';
-    if (round === 2) hint = b.bidder === me ? 'Raise your own contract, or pass.' : 'Raise to 24+ to take over the contract.';
+    if (round === 2) hint = b.bidder === me ? 'Raise your own contract, or pass.' : `Bid ${(g.legal.bidValues || []).map((v) => `${v} (${BID_NAMES[v]})`).join(' or ') || 'higher'} to take over the contract.`;
     if (hint) children.push(h('p', { class: 'bp-sub muted' }, hint));
     // stepper + Bid/Pass on one side, the optional trump picker on the other (stacked on narrow screens)
     const controls = h('div', { class: 'bp-controls' }, canBid ? stepper : null, row);

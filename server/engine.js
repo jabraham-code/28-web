@@ -99,6 +99,8 @@ function dealSecond(game) {
 
 // Minimum bid to overcall your partner when the opponent in between passed.
 export const PARTNER_MIN = 18;
+// Second round (after all 8 cards are dealt): only these bids are allowed.
+export const ROUND2_BIDS = [20, 24, 28];
 
 function minBidFor(game, seat) {
   const b = game.bidding;
@@ -112,9 +114,19 @@ function minBidFor(game, seat) {
       if (lastPrev && lastPrev.bid === null) min = Math.max(min, PARTNER_MIN);
     }
   } else {
-    min = Math.max(24, b.currentBid + 1);
+    // Second round: only 20, 24 or 28, higher than the current bid.
+    min = ROUND2_BIDS.find((v) => v > b.currentBid) ?? null;
+    if (min == null) return null;
   }
   return min > MAX_BID ? null : min;
+}
+
+/** Every bid value allowed now, given the minimum. */
+function allowedBids(game, min) {
+  if (game.bidding.round === 2) return ROUND2_BIDS.filter((v) => v >= min);
+  const out = [];
+  for (let v = min; v <= MAX_BID; v++) out.push(v);
+  return out;
 }
 
 function isFirstBid(game) {
@@ -190,7 +202,7 @@ function playTrumpCardError(game, seat) {
 }
 
 function computeLegal(game, seat) {
-  const legal = { actions: [], minBid: null, maxBid: MAX_BID, playable: [], trumpChoices: [] };
+  const legal = { actions: [], minBid: null, maxBid: MAX_BID, bidValues: [], playable: [], trumpChoices: [] };
   if (!isSeat(seat)) return legal;
   if (game.phase === 'handEnd') {
     legal.actions.push('nextHand');
@@ -209,6 +221,7 @@ function computeLegal(game, seat) {
         legal.actions.push('pass');
       }
       legal.minBid = min;
+      legal.bidValues = min == null ? [] : allowedBids(game, min);
       break;
     }
     case 'chooseTrump':
@@ -285,6 +298,7 @@ function doBid(game, seat, value, trump) {
   if (min == null) return 'No higher bid is possible';
   if (value > MAX_BID) return `Bid cannot exceed ${MAX_BID}`;
   if (value < min) return `Bid must be at least ${min}`;
+  if (game.bidding.round === 2 && !ROUND2_BIDS.includes(value)) return 'In the second round you can only bid 20, 24 or 28';
   const b = game.bidding;
   // Optional: name the trump card together with the bid (kept secret; applied if this bid wins).
   if (trump != null) {

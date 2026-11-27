@@ -23,8 +23,8 @@ Rules summary:
 - 32 cards (7 to Ace in 4 suits). Rank high to low in every suit: J, 9, A, 10, K, Q, 8, 7.
 - Card points: J=3, 9=2, A=1, 10=1, others 0. 28 points in total.
 - 4 players, partners sit opposite. Seats 0 & 2 are team A, seats 1 & 3 team B. Play passes seat → seat+1.
-- 4 cards are dealt, then an auction (14 to 28). The first bidder must bid at least 14. Each player gets exactly one turn to bid or pass (one round only). To overcall your own partner when the opponent who bid just before you passed, you must bid at least 18. After all 8 cards are dealt there is one more round (again one turn each) where bids must be at least 24.
-- The winning bidder secretly places one card face down: its suit is trump. Four more cards are dealt and a second auction may raise the bid to 24+.
+- 4 cards are dealt, then an auction (14 to 28). The first bidder must bid at least 14. Each player gets exactly one turn to bid or pass (one round only). To overcall your own partner when the opponent who bid just before you passed, you must bid at least 18. After all 8 cards are dealt there is one more round (again one turn each) where the only allowed bids are 20 (Honors), 24 (Senior) or 28 (Full), higher than the current bid.
+- The winning bidder secretly places one card face down: its suit is trump. Four more cards are dealt and a second auction may raise the bid to 20, 24 or 28.
 - Play: must follow suit if able. Until trump is revealed, a player who cannot follow may discard, or "call trump" (bidder must reveal it; caller must then play a trump if they have one). The bidder may not lead trump while it is concealed unless holding only trumps, and when void in a non-trump led suit may only discard a non-trump or reveal and play the concealed trump card.
 - Highest trump wins the trick (once revealed), otherwise the highest card of the suit led.
 - The bidding team must capture at least the bid in card points. Game points: bid 14-19 → +1 / -2, 20-24 → +2 / -3, 25-28 → +3 / -4. Both teams start with the same game points and each hand's points are exchanged (one team gains what the other loses); a team below zero loses the match.
@@ -66,7 +66,7 @@ export function legalOptions(view) {
   if (acts.includes('callTrump')) opts.push({ label: 'Call for the trump to be revealed (then you must play a trump if you have one)', action: { type: 'callTrump' } });
   if (acts.includes('chooseTrump')) for (const c of l.trumpChoices || []) opts.push({ label: `Conceal ${cardName(c)} → ${SUIT_NAMES[c[1]]} become trump`, action: { type: 'chooseTrump', card: c } });
   if (acts.includes('pass')) opts.push({ label: 'Pass', action: { type: 'pass' } });
-  if (acts.includes('bid') && l.minBid != null) for (let v = l.minBid; v <= (l.maxBid || 28); v++) opts.push({ label: `Bid ${v}`, action: { type: 'bid', value: v } });
+  if (acts.includes('bid') && l.minBid != null) for (const v of (l.bidValues?.length ? l.bidValues : Array.from({ length: (l.maxBid || 28) - l.minBid + 1 }, (_, i) => l.minBid + i))) opts.push({ label: `Bid ${v}`, action: { type: 'bid', value: v } });
   if (acts.includes('redeal')) opts.push({ label: 'Ask for a redeal (you hold no point cards)', action: { type: 'redeal' } });
   return opts;
 }

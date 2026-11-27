@@ -225,6 +225,20 @@
 .bp-title { margin: 4px 0 0; font-family: var(--serif); font-size: 1.25rem; }
 .bp-sub { margin: -4px 0 0; font-size: .8rem; }
 .bp-wait { margin: 2px 0; font-size: .95rem; }
+.bid-stepper.r2-options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.r2-opt {
+  display: grid; justify-items: center; gap: 1px; padding: 8px 4px; min-height: 64px; border-radius: 14px; cursor: pointer;
+  border: 1px solid rgba(232, 193, 112, .35); background: rgba(232, 193, 112, .08); color: var(--ink);
+  transition: background .15s, border-color .15s, transform .1s, box-shadow .15s;
+}
+.r2-opt b { font-family: var(--serif); font-size: 1.6rem; line-height: 1; color: var(--gold-hi); font-variant-numeric: tabular-nums; }
+.r2-opt .r2-name { font-weight: 800; font-size: .82rem; letter-spacing: .04em; }
+.r2-opt small { font-size: .62rem; color: var(--ink-3); white-space: nowrap; }
+.r2-opt:hover:not(:disabled) { background: rgba(232, 193, 112, .18); border-color: var(--gold); }
+.r2-opt:active:not(:disabled) { transform: scale(.97); }
+.r2-opt.on { background: linear-gradient(180deg, rgba(247, 220, 149, .3), rgba(232, 193, 112, .16)); border-color: var(--gold-hi); box-shadow: 0 0 0 2px var(--gold-hi), 0 6px 16px rgba(0, 0, 0, .35); }
+.r2-opt:disabled { opacity: .32; cursor: not-allowed; }
+.r2-opt:focus-visible { outline: 3px solid var(--gold-hi); outline-offset: 2px; }
 .bid-stepper { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 2px 0; }
 .step-btn {
   width: 52px; height: 52px; border-radius: 50%; border: 1px solid rgba(232, 193, 112, .4); cursor: pointer;
@@ -522,4 +536,49 @@
 @media (max-width: 380px) {
   #screen-game .hud-right .icon-btn.icon-btn { width: 36px; height: 36px; }
   #screen-game .hud-contract .cc-by.cc-by { display: inline; max-width: 5ch; }
+}
+
+/* ---------- hand score card (under the HUD during play) ---------- */
+.hud .hand-card {
+  grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; min-width: 0;
+  height: 30px; padding: 0 12px; margin: 0 auto; width: min(100%, 860px);
+  border-radius: 10px; background: rgba(0, 0, 0, .28); border: 1px solid var(--line); font-size: .78rem; white-space: nowrap;
+}
+.hud .hand-card[hidden] { display: none; }
+.hand-card.made { border-color: rgba(120, 220, 150, .55); }
+.hand-card.beaten { border-color: rgba(255, 122, 122, .55); }
+.hc-side { display: inline-flex; align-items: baseline; gap: 4px; flex: none; }
+.hc-side b { font-size: 1.05rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.hc-side.t0 b { color: var(--team0); }
+.hc-side.t1 b { color: var(--team1); }
+.hc-name { font-weight: 700; color: var(--ink-2); font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; }
+.hc-of { color: var(--ink-3); font-weight: 600; }
+.hc-bar { position: relative; flex: 1 1 120px; min-width: 70px; height: 8px; border-radius: 4px; background: rgba(255, 255, 255, .08); overflow: visible; }
+.hc-fill { position: absolute; top: 0; bottom: 0; left: 0; border-radius: 4px; transition: width .5s var(--ease); }
+.hc-fill.hc-def { left: auto; right: 0; opacity: .55; }
+.hc-fill.t0 { background: var(--team0); }
+.hc-fill.t1 { background: var(--team1); }
+.hc-mark { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--gold-hi); border-radius: 1px; box-shadow: 0 0 6px rgba(247, 220, 149, .7); }
+.hc-need { color: var(--ink-2); flex: none; }
+.hc-need b { color: var(--ink); }
+.hc-flag { font-weight: 800; flex: none; padding: 1px 8px; border-radius: 999px; }
+.hc-flag.ok { color: #0c2b18; background: var(--ok); }
+.hc-flag.bad { color: #2b0c0c; background: var(--bad); }
+.hc-trick { color: var(--ink-3); font-weight: 600; flex: none; }
+.hc-need.hc-short { display: none; }
+/* the per-team card-point line under the match score is redundant with the card */
+#screen-game.has-hand-card .hud-scores .tug-pts { display: none !important; }
+@media (max-width: 860px) {
+  .hud .hand-card { gap: 8px; padding: 0 10px; font-size: .72rem; }
+  .hc-trick { display: none; }
+}
+@media (max-width: 560px) {
+  .hud .hand-card { height: 28px; gap: 6px; padding: 0 8px; }
+  .hc-need { display: none; }
+  .hc-need.hc-short { display: inline; }
+  .hc-name { font-size: .64rem; letter-spacing: .02em; }
+}
+@media (max-height: 560px) and (orientation: landscape) {
+  .hud .hand-card { height: 24px; font-size: .7rem; }
+  .hc-trick { display: inline; }
 }

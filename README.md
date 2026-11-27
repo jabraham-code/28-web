@@ -11,7 +11,7 @@ Rules follow the main game on [pagat.com/jass/28](https://www.pagat.com/jass/28.
   - compulsory first bid, with a redeal allowed if that bidder holds no point cards;
   - one bidding round after each deal (every player bids or passes once), with an optional trump card picked together with the bid;
   - a bid of at least 18 to overcall your partner unless the opponent in between raised;
-  - a second bidding round after the second deal, with a minimum of 24;
+  - a second bidding round after the second deal, where the only bids are 20 (Honors), 24 (Senior) or 28 (Full);
   - a concealed trump card, calling for trump, and the bidder's restrictions while trump is hidden;
   - automatic redeal when one hand holds all four Jacks;
   - match scoring: both teams start with 5 points and exchange +1/−2, +2/−3 or +3/−4 per hand depending on the bid; a team that drops below zero loses.

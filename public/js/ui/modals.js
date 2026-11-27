@@ -74,7 +74,7 @@ export function showRules() {
     </section>
     <section>
       <h3>Bidding &mdash; round 2</h3>
-      <p>Four more cards each. One more round of bidding (one turn each) with a minimum of <b>24</b> (or current bid + 1). If someone else wins, the old trump card goes back and the new bidder picks a new one.</p>
+      <p>Four more cards each. One more round of bidding (one turn each) where the only bids allowed are <b>20 (Honors)</b>, <b>24 (Senior)</b> or <b>28 (Full)</b>, higher than the current bid. If someone else wins, the old trump card goes back and the new bidder picks a new one.</p>
       <p class="muted">Anyone dealt all four Jacks causes an automatic redeal.</p>
     </section>
     <section>

@@ -42,6 +42,7 @@ export function mountTable(root, ctx) {
         </div>
         <button class="icon-btn hud-opt" type="button" data-act="leave" aria-label="Leave room"><svg viewBox="0 0 24 24" class="ico"><path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></button>
       </div>
+      <div class="hand-card" aria-live="polite" hidden></div>
     </header>
     <div class="table-wrap">
       <div class="felt" role="region" aria-label="Card table">
@@ -363,8 +364,48 @@ export function mountTable(root, ctx) {
     const tb = q('.trump-badge');
     const tbHtml = trumpBadgeHTML(r);
     if (tb.dataset.html !== tbHtml) { tb.dataset.html = tbHtml; tb.innerHTML = tbHtml; tb.classList.toggle('revealed', !!g.trump?.revealed); }
+    renderHandCard(r, g);
     const tp = g.teamPoints || [0, 0];
     q('.hand-pts').innerHTML = `<span class="cc-label">Points</span><b class="t0-text">${tp[0]}</b><span class="muted">–</span><b class="t1-text">${tp[1]}</b>`;
+  }
+
+  /** Score card under the HUD: card points vs the contract, updated after every trick. */
+  function renderHandCard(r, g) {
+    const el = q('.hand-card');
+    const c = g.contract;
+    const show = !!c && (g.phase === 'playing' || g.phase === 'handEnd');
+    el.hidden = !show;
+    root.classList.toggle('has-hand-card', show);
+    if (!show) { el.dataset.html = ''; return; }
+    const myTeam = r.you.seat != null ? teamOf(r.you.seat) : null;
+    const name = (t) => (myTeam == null ? teamLabel(r, t) : t === myTeam ? 'Us' : 'Them');
+    const bt = teamOf(c.bidder), dt = 1 - bt;
+    const tp = g.teamPoints || [0, 0];
+    const bidPts = tp[bt], defPts = tp[dt];
+    const setAt = 29 - c.bid; // defenders need this many to beat the contract
+    const done = (g.tricksWon || []).reduce((a, n) => a + n, 0);
+    const made = bidPts >= c.bid, set = defPts >= setAt;
+    const bidNeed = Math.max(0, c.bid - bidPts), defNeed = Math.max(0, setAt - defPts);
+    const status = made ? '<span class="hc-flag ok">Contract made</span>'
+      : set ? '<span class="hc-flag bad">Contract beaten</span>'
+      : `<span class="hc-need">${name(bt)} need <b>${bidNeed}</b> · ${name(dt)} need <b>${defNeed}</b> to beat it</span><span class="hc-need hc-short" title="${name(bt)} need ${bidNeed} more · ${name(dt)} need ${defNeed} to beat it">need <b>${bidNeed}</b> · beat <b>${defNeed}</b></span>`;
+    const html = `
+      <span class="hc-side t${bt}"><span class="hc-name">${esc(name(bt))}</span><b>${bidPts}</b><span class="hc-of">/ ${c.bid}</span></span>
+      <span class="hc-bar" role="img" aria-label="${esc(name(bt))} ${bidPts} of ${c.bid}; ${esc(name(dt))} ${defPts}">
+        <i class="hc-fill t${bt}" style="width:${(bidPts / 28) * 100}%"></i>
+        <i class="hc-fill hc-def t${dt}" style="width:${(defPts / 28) * 100}%"></i>
+        <i class="hc-mark" style="left:${(c.bid / 28) * 100}%" title="Contract ${c.bid}"></i>
+      </span>
+      <span class="hc-side hc-right t${dt}"><b>${defPts}</b><span class="hc-name">${esc(name(dt))}</span></span>
+      ${status}
+      <span class="hc-trick">Trick ${Math.min(8, done + (g.phase === 'playing' ? 1 : 0))}/8</span>`;
+    if (el.dataset.html === html) return;
+    const changed = el.dataset.html && prev;
+    el.dataset.html = html;
+    el.innerHTML = html;
+    el.classList.toggle('made', made);
+    el.classList.toggle('beaten', set);
+    if (changed) pulse(el, 'bump');
   }
 
   // -------------------------------------------------------------- plates
