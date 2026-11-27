@@ -23,11 +23,11 @@ Rules summary:
 - 32 cards (7 to Ace in 4 suits). Rank high to low in every suit: J, 9, A, 10, K, Q, 8, 7.
 - Card points: J=3, 9=2, A=1, 10=1, others 0. 28 points in total.
 - 4 players, partners sit opposite. Seats 0 & 2 are team A, seats 1 & 3 team B. Play passes seat → seat+1.
-- 4 cards are dealt, then an auction (14 to 28). The first bidder must bid at least 14. To overcall your own partner right after your left-hand opponent passed, you must bid at least 20. Bidding ends after 3 passes in a row.
+- 4 cards are dealt, then an auction (14 to 28). The first bidder must bid at least 14. Each player gets exactly one turn to bid or pass (one round only). To overcall your own partner when the opponent who bid just before you passed, you must bid at least 18. After all 8 cards are dealt there is one more round (again one turn each) where bids must be at least 24.
 - The winning bidder secretly places one card face down: its suit is trump. Four more cards are dealt and a second auction may raise the bid to 24+.
 - Play: must follow suit if able. Until trump is revealed, a player who cannot follow may discard, or "call trump" (bidder must reveal it; caller must then play a trump if they have one). The bidder may not lead trump while it is concealed unless holding only trumps, and when void in a non-trump led suit may only discard a non-trump or reveal and play the concealed trump card.
 - Highest trump wins the trick (once revealed), otherwise the highest card of the suit led.
-- The bidding team must capture at least the bid in card points. Game points: bid 14-19 → +1 / -2, 20-24 → +2 / -3, 25-28 → +3 / -4.
+- The bidding team must capture at least the bid in card points. Game points: bid 14-19 → +1 / -2, 20-24 → +2 / -3, 25-28 → +3 / -4. Both teams start with the same game points and each hand's points are exchanged (one team gains what the other loses); a team below zero loses the match.
 
 Strategy hints: count points still out; Jacks and Nines are the power cards; feed points (A, 10, 9) to your partner when they are sure to win the trick; throw zero-point cards when losing; don't overbid without Jacks and length in a suit; conceal a low card of your longest strong suit as trump.
 
@@ -62,6 +62,7 @@ export function legalOptions(view) {
   const opts = [];
   if (acts.includes('play')) for (const c of l.playable || []) opts.push({ label: `Play ${cardName(c)}`, action: { type: 'play', card: c } });
   if (acts.includes('playTrumpCard')) opts.push({ label: `Reveal and play your concealed trump card (${cardName(view.trump?.card)})`, action: { type: 'playTrumpCard' } });
+  if (acts.includes('revealTrump')) opts.push({ label: 'Reveal your trump card into your hand, then choose which trump to play', action: { type: 'revealTrump' } });
   if (acts.includes('callTrump')) opts.push({ label: 'Call for the trump to be revealed (then you must play a trump if you have one)', action: { type: 'callTrump' } });
   if (acts.includes('chooseTrump')) for (const c of l.trumpChoices || []) opts.push({ label: `Conceal ${cardName(c)} → ${SUIT_NAMES[c[1]]} become trump`, action: { type: 'chooseTrump', card: c } });
   if (acts.includes('pass')) opts.push({ label: 'Pass', action: { type: 'pass' } });
@@ -76,7 +77,7 @@ function describe(view, names) {
   const lines = [];
   lines.push(`You are seat ${me} (team ${me % 2 === 0 ? 'A' : 'B'}). Your partner is seat ${(me + 2) % 4}.`);
   lines.push(`Phase: ${view.phase}${view.bidding ? `, bidding round ${view.bidding.round}` : ''}. Hand #${view.handNumber}. Dealer: seat ${view.dealer}.`);
-  lines.push(`Match score — team A: ${view.scores[0]}, team B: ${view.scores[1]} (target ±${view.targetScore}).`);
+  lines.push(`Match score — team A: ${view.scores[0]}, team B: ${view.scores[1]} (both teams started with ${view.targetScore}; each hand's points move from one team to the other; a team below 0 loses the match).`);
   lines.push(`Your hand: ${view.hand.map(cardName).join(', ') || '(empty)'}`);
   if (view.bidding?.history?.length) {
     lines.push(`Bidding so far: ${view.bidding.history.map((h) => `seat ${h.seat}: ${h.bid ?? 'pass'}`).join('; ')}`);

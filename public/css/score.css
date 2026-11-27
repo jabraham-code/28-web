@@ -1,0 +1,144 @@
+/* Tug-of-war match score (ui/score.js): "Us 5 [■■■■■|■■■■■] 5 Them".
+   Lives in the HUD (.hud-scores) and in the hand-end / match-end modals. */
+
+.tug {
+  --n: 10;
+  display: grid; grid-template-columns: auto minmax(56px, 1fr) auto; align-items: center; gap: 10px;
+  font-variant-numeric: tabular-nums; min-width: 0;
+}
+.tug-end { position: relative; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.tug-r { flex-direction: row-reverse; }
+.tug-id { display: grid; justify-items: start; gap: 1px; line-height: 1.1; min-width: 0; }
+.tug-r .tug-id { justify-items: end; }
+.tug-lbl { font-size: .72rem; font-weight: 700; color: var(--ink-2); max-width: 12ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tug-tag {
+  font-size: .52rem; font-weight: 800; letter-spacing: .08em; line-height: 1; padding: 2px 4px; border-radius: 4px; white-space: nowrap;
+  color: #fff; background: rgba(255, 122, 122, .28); border: 1px solid rgba(255, 122, 122, .55);
+}
+.tug-tag[hidden] { display: none; }
+.tug-end.out .tug-tag { background: var(--bad); border-color: var(--bad); color: #2a0606; }
+.tug-num { display: inline-block; font-size: 1.5rem; font-weight: 800; line-height: 1; min-width: 1ch; text-align: center; }
+.tug-end.t0 .tug-num { color: var(--team0); }
+.tug-end.t1 .tug-num { color: var(--team1); }
+.tug-end.danger .tug-num, .tug-end.out .tug-num { color: var(--bad); }
+.tug-end.out .tug-lbl { color: var(--ink-3); }
+
+.tug-mid { display: grid; gap: 3px; min-width: 0; }
+.tug-bar { position: relative; height: 10px; }
+.tug-track {
+  position: absolute; inset: 0; display: flex; border-radius: 3px; overflow: hidden; background: rgba(255, 255, 255, .08);
+}
+.tug.tug-segs .tug-track {
+  -webkit-mask-image: repeating-linear-gradient(90deg, #000 0 calc(100% / var(--n) - 2px), transparent calc(100% / var(--n) - 2px) calc(100% / var(--n)));
+          mask-image: repeating-linear-gradient(90deg, #000 0 calc(100% / var(--n) - 2px), transparent calc(100% / var(--n) - 2px) calc(100% / var(--n)));
+  -webkit-mask-size: calc(100% + 2px) 100%; mask-size: calc(100% + 2px) 100%;
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+}
+.tug-fill { display: block; height: 100%; flex: none; transition: width .8s var(--ease); }
+.tug-fill.t0 { background: var(--team0); }
+.tug-fill.t1 { background: var(--team1); }
+.tug-fill-r { opacity: .55; }
+.tug-even {
+  position: absolute; left: 50%; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; border-radius: 1px;
+  background: var(--gold-hi); box-shadow: 0 0 0 1px rgba(0, 0, 0, .45);
+}
+.tug.danger-l .tug-fill-l, .tug.danger-r .tug-fill-r { animation: tug-danger 1.1s ease-in-out infinite; }
+@keyframes tug-danger { 50% { opacity: .25; } }
+
+.tug-pts { display: flex; justify-content: space-between; gap: 8px; font-size: .66rem; font-weight: 600; color: var(--ink-3); line-height: 1.1; white-space: nowrap; }
+.tug-pts[hidden] { display: none; }
+.tug-pts b { display: inline-block; color: var(--ink); font-size: .78rem; }
+.tug-pts .bidder b { color: var(--gold-hi); }
+
+/* "+2" / "−2" floating over each end when the score changes */
+.tug-float {
+  position: absolute; left: 50%; bottom: 100%; transform: translateX(-50%); pointer-events: none; opacity: 0;
+  font-weight: 800; font-size: .95rem; white-space: nowrap; text-shadow: 0 1px 4px rgba(0, 0, 0, .7); z-index: 2;
+}
+.tug-float.pos { color: var(--ok); }
+.tug-float.neg { color: var(--bad); }
+.tug-float.go { animation: tug-float-up 1.1s var(--ease) both; }
+@keyframes tug-float-up {
+  0% { opacity: 0; transform: translate(-50%, 8px) scale(.8); }
+  15% { opacity: 1; transform: translate(-50%, 0) scale(1.1); }
+  70% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -14px); }
+}
+
+/* ---------- HUD ---------- */
+.hud .hud-scores { display: flex; justify-content: center; min-width: 0; cursor: pointer; border-radius: 12px; }
+.hud .hud-scores:focus-visible { outline: 2px solid var(--gold-hi); outline-offset: 2px; }
+.hud-scores .tug {
+  width: min(100%, 440px); min-height: 44px; padding: 4px 12px; border-radius: 12px;
+  background: rgba(0, 0, 0, .25); border: 1px solid var(--line); transition: border-color .2s, background .2s;
+}
+.hud-scores:hover .tug { border-color: rgba(232, 193, 112, .35); background: rgba(0, 0, 0, .32); }
+/* in the HUD the float drops down over the felt (the HUD sits at the top edge) */
+.tug-hud .tug-float { bottom: auto; top: 100%; }
+.tug-hud .tug-float.go { animation-name: tug-float-down; }
+@keyframes tug-float-down {
+  0% { opacity: 0; transform: translate(-50%, -8px) scale(.8); }
+  15% { opacity: 1; transform: translate(-50%, 0) scale(1.15); }
+  70% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, 12px); }
+}
+/* the tug shows card points this hand, so the separate desktop chip is redundant */
+.hud .hud-contract .hand-pts { display: none; }
+
+@media (max-width: 1100px) {
+  .hud-scores .tug { width: min(100%, 380px); gap: 8px; }
+  .hud-scores .tug-num { font-size: 1.3rem; }
+}
+@media (max-width: 860px) {
+  .hud-scores .tug { width: min(100%, 520px); }
+}
+/* phones, portrait: score gets its own full-width second row */
+@media (max-width: 560px) {
+  #screen-game .hud { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "left contract right" "scores scores scores"; column-gap: 6px; row-gap: 5px; }
+  #screen-game .hud-meta { display: grid; gap: 0; }
+  #screen-game .hud-contract { justify-content: center; min-width: 0; }
+  .hud-scores .tug { width: 100%; min-height: 0; padding: 3px 10px; gap: 8px; }
+  .hud-scores .tug-num { font-size: 1.3rem; }
+  .hud-scores .tug-bar { height: 9px; }
+  .hud-scores .tug-pts { font-size: .62rem; }
+  .hud-scores .tug-pts b { font-size: .72rem; }
+}
+/* row 1 now holds room/hand, contract and the icon buttons: keep the chips compact */
+@media (max-width: 440px) {
+  #screen-game .hud-contract { gap: 4px; }
+  #screen-game .hud-contract .trump-badge > span:not([class]) { display: none; } /* suit icon only */
+  #screen-game .hud-contract .contract-chip, #screen-game .hud-contract .trump-badge { height: 34px; padding: 0 7px; }
+  #screen-game .hud-contract .cc-by { max-width: 5ch; }
+}
+@media (max-width: 380px) {
+  #screen-game .hud-right { gap: 3px; }
+  #screen-game .hud-right .icon-btn { width: 30px; height: 30px; }
+  #screen-game .hud-contract .cc-by { display: none; }
+}
+/* phones in landscape: one HUD row, tug ~34px tall */
+@media (max-height: 560px) and (orientation: landscape) {
+  #screen-game .hud-scores { justify-content: flex-start; }
+  .hud-scores .tug { width: clamp(230px, 34vw, 340px); min-height: 0; height: 34px; padding: 0 9px; gap: 7px; }
+  .hud-scores .tug-end { gap: 5px; }
+  .hud-scores .tug-num { font-size: 1.1rem; }
+  .hud-scores .tug-lbl { font-size: .66rem; max-width: 8ch; }
+  .hud-scores .tug-tag { font-size: .46rem; padding: 1px 3px; }
+  .hud-scores .tug-mid { gap: 2px; }
+  .hud-scores .tug-bar { height: 7px; }
+  .hud-scores .tug-even { top: -2px; bottom: -2px; }
+  .hud-scores .tug-pts { font-size: .58rem; }
+  .hud-scores .tug-pts b { font-size: .66rem; }
+}
+
+/* ---------- modals ---------- */
+.tug-modal { margin: 4px 0 14px; padding: 18px 4px 4px; }
+.tug-modal .tug-num { font-size: 2rem; }
+.tug-modal .tug-lbl { font-size: .8rem; max-width: 14ch; }
+.tug-modal .tug-bar { height: 14px; }
+.tug-modal .tug-fill { transition-duration: 1.1s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tug-fill { transition: none !important; }
+  .tug.danger-l .tug-fill-l, .tug.danger-r .tug-fill-r { animation: none !important; opacity: .7; }
+  .tug-float.go { animation: none !important; opacity: 0; }
+}

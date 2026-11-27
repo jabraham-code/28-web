@@ -55,31 +55,102 @@ export function renderBidding(panel, room, ctx) {
   } else cur.innerHTML = '<span class="bp-none muted">No bids yet</span>';
 
   const hist = h('ol', { class: 'bp-history', 'aria-label': 'Bid history' });
-  for (const e of b.history || []) {
-    hist.append(h('li', { class: `chip t${teamOf(e.seat)} ${e.bid == null ? 'pass' : 'bid'} r${e.round}`, title: `Round ${e.round}`, html: `<span class="chip-name">${esc(seatName(room, e.seat))}</span><b>${e.bid == null ? 'Pass' : e.bid}</b>` }));
+  // one row only: the latest few calls, older ones collapsed into a "+N" chip
+  const all = b.history || [];
+  const SHOW = 3;
+  const shown = all.length > SHOW + 1 ? all.slice(-SHOW) : all;
+  if (shown.length < all.length) {
+    const older = all.slice(0, all.length - shown.length);
+    hist.append(h('li', { class: 'chip more', title: older.map((e) => `${seatName(room, e.seat)}: ${e.bid == null ? 'Pass' : e.bid}`).join(', ') }, `+${older.length}`));
+  }
+  for (const e of shown) {
+    hist.append(h('li', { class: `chip t${teamOf(e.seat)} ${e.bid == null ? 'pass' : 'bid'} r${e.round}`, title: `Round ${e.round}`, html: `<span class="chip-name">${esc(seatName(room, e.seat).replace(/^Bot\s+/i, ''))}</span><b>${e.bid == null ? 'Pass' : e.bid}</b>` }));
   }
   const children = [head, cur];
   if ((b.history || []).length) children.push(hist);
 
   if (myTurn) {
     const min = g.legal.minBid, max = g.legal.maxBid || 28;
-    const grid = h('div', { class: 'bid-grid', role: 'group', 'aria-label': 'Choose a bid' });
-    if (acts.includes('bid') && min != null) {
-      for (let v = min; v <= max; v++) {
-        grid.append(h('button', { class: `bid-btn${v >= 20 ? ' hi' : ''}${v >= 25 ? ' top' : ''}`, type: 'button', 'data-hint': `bid:${v}`, onclick: () => ctx.act({ type: 'bid', value: v }) }, String(v)));
+    const canBid = acts.includes('bid') && min != null;
+    const stepper = h('div', { class: 'bid-stepper', role: 'group', 'aria-label': 'Choose a bid' });
+    const row = h('div', { class: 'bp-actions' });
+    panel._setBid = null;
+    if (canBid) {
+      let value = min;
+      const minus = h('button', { class: 'step-btn', type: 'button', 'aria-label': 'Lower bid' }, '−');
+      const plus = h('button', { class: 'step-btn', type: 'button', 'aria-label': 'Raise bid' }, '+');
+      const num = h('output', { class: 'step-value', 'aria-live': 'polite' });
+      const stakes = h('span', { class: 'step-stakes muted' });
+      let trump = null;
+      const bidBtn = h('button', { class: 'btn btn-gold', type: 'button', 'data-hint': 'bid', onclick: () => ctx.act(trump ? { type: 'bid', value, trump } : { type: 'bid', value }) });
+      const label = () => { bidBtn.innerHTML = `Bid ${value}${trump ? ` · ${suitIcon(suitOf(trump))}` : ''}`; };
+      const set = (v) => {
+        value = Math.min(max, Math.max(min, v));
+        num.textContent = String(value);
+        num.classList.toggle('hi', value >= 20);
+        num.classList.toggle('top', value >= 25);
+        stakes.textContent = value >= 25 ? 'win +3 · lose −4' : value >= 20 ? 'win +2 · lose −3' : 'win +1 · lose −2';
+        minus.disabled = value <= min;
+        plus.disabled = value >= max;
+        label();
+      };
+      // press-and-hold repeats
+      const hold = (btn, d) => {
+        let t = 0;
+        const stop = () => { clearTimeout(t); clearInterval(t); t = 0; };
+        btn.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          set(value + d);
+          t = setTimeout(() => { t = setInterval(() => set(value + d), 90); }, 380);
+        });
+        for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) btn.addEventListener(ev, stop);
+        btn.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); set(value + d); } });
+      };
+      hold(minus, -1);
+      hold(plus, 1);
+      stepper.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowUp' || e.key === 'ArrowRight') { e.preventDefault(); set(value + 1); }
+        if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') { e.preventDefault(); set(value - 1); }
+      });
+      stepper.append(minus, h('div', { class: 'step-num' }, num, stakes), plus);
+      set(min);
+      panel._setBid = set;
+      row.append(bidBtn);
+      // Optional: pick the trump card now, together with the bid.
+      const holdsContract = round === 2 && g.contract?.bidder === me;
+      if (!holdsContract && (g.hand || []).length) {
+        const picks = h('div', { class: 'trump-pick', role: 'group', 'aria-label': 'Trump card (optional)' });
+        const note = h('span', { class: 'tp-note muted' }, 'Trump card (optional) — or choose it if you win');
+        for (const c of g.hand) {
+          const el = createCard(c, { button: true });
+          el.title = `${SUIT_NAMES[suitOf(c)]} as trump`;
+          el.setAttribute('aria-pressed', 'false');
+          el.addEventListener('click', () => {
+            trump = trump === c ? null : c;
+            for (const x of picks.querySelectorAll('.card')) {
+              const on = x.dataset.card === trump;
+              x.classList.toggle('picked', on);
+              x.setAttribute('aria-pressed', String(on));
+            }
+            note.innerHTML = trump ? `Trump: <b>${SUIT_NAMES[suitOf(trump)]}</b> — placed face-down if you win` : 'Trump card (optional) — or choose it if you win';
+            label();
+          });
+          picks.append(el);
+        }
+        stepper._trump = h('div', { class: 'trump-pick-wrap' }, note, picks);
       }
     }
-    const row = h('div', { class: 'bp-actions' });
     if (acts.includes('pass')) row.append(h('button', { class: 'btn btn-ghost', type: 'button', 'data-hint': 'pass', onclick: () => ctx.act({ type: 'pass' }) }, 'Pass'));
     if (acts.includes('redeal')) row.append(h('button', { class: 'btn btn-ghost', type: 'button', 'data-hint': 'redeal', title: 'You hold no point cards', onclick: () => ctx.act({ type: 'redeal' }) }, 'Redeal'));
     let hint = '';
     if (round === 1 && !acts.includes('pass') && acts.includes('bid')) hint = 'You open the bidding and must bid.';
     if (acts.includes('redeal')) hint = 'No point cards — you may ask for a redeal.';
-    if (round === 1 && b.bidder != null && b.bidder === partnerOf(me) && min >= 20 && b.currentBid < 19) hint = 'Partner holds the bid — you need 20+ to overbid.';
+    if (round === 1 && b.bidder != null && b.bidder === partnerOf(me) && min >= 18 && b.currentBid < 17) hint = 'Partner holds the bid — you need 18+ to overbid.';
     if (round === 2) hint = b.bidder === me ? 'Raise your own contract, or pass.' : 'Raise to 24+ to take over the contract.';
-    children.push(h('h3', { class: 'bp-title' }, 'Your bid'));
     if (hint) children.push(h('p', { class: 'bp-sub muted' }, hint));
-    children.push(grid, row);
+    // stepper + Bid/Pass on one side, the optional trump picker on the other (stacked on narrow screens)
+    const controls = h('div', { class: 'bp-controls' }, canBid ? stepper : null, row);
+    children.push(h('div', { class: `bp-main${stepper._trump ? ' has-pick' : ''}` }, stepper._trump || null, controls));
   } else if (g.turn != null) {
     children.push(h('p', { class: 'bp-wait', html: `Waiting for <span class="t${teamOf(g.turn)}-text">${esc(seatName(room, g.turn))}</span><span class="dots"></span>` }));
   }

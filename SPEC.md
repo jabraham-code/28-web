@@ -26,14 +26,15 @@ Do not edit files you don't own. If a contract seems wrong, follow it anyway and
 ### Deal & bidding round 1 (`phase: "bidding1"`)
 - Deal 4 cards each. Turn starts at `firstSeat`.
 - First bidder MUST bid (min 14). Exception: if their 4 cards contain no point cards (no J/9/A/T) they may instead `redeal` (same dealer reshuffles & redeals).
-- Bids are integers 14..28, each must exceed current bid. Others may bid or pass. A passed player MAY bid again when their turn comes back.
-- **Partner rule:** if the current high bid belongs to your partner AND the player immediately before you (seat+3) passed on their last turn, your bid must be ≥ 20.
-- Bidding ends when 3 players pass in succession after the last bid.
+- Bids are integers 14..28, each must exceed current bid. Others may bid or pass. **One bidding round per deal:** each player gets exactly one turn (bid or pass), starting at `firstSeat` and ending with the dealer.
+- **Partner rule:** if the current high bid belongs to your partner AND the player immediately before you (seat+3) passed on their last turn, your bid must be ≥ 18. If that opponent raised the bid, you only need to beat it by 1.
+- Bidding ends after the fourth turn; the highest bidder wins.
+- A bid may optionally name the trump card: `{ type: "bid", value, trump: card }` (a card in the bidder's hand; secret, never in any view). If that bid wins the round, the card is placed as the concealed trump immediately and the `chooseTrump` step is skipped. Otherwise the winner chooses trump as below. In round 2 the current contract holder cannot name a new card (they keep theirs).
 - → `phase: "chooseTrump"`: bidder picks one card from their 4 cards; it is removed from their hand and placed face-down (concealed trump card). Trump suit = that card's suit. Only bidder knows.
 
 ### Deal 2 & bidding round 2 (`phase: "bidding2"`)
 - Deal 4 more cards each (bidder ends with 7 in hand + 1 concealed).
-- One more auction starting at `firstSeat`; any player may raise, minimum `max(24, currentBid + 1)`, or pass. Same "3 passes in succession after the last bid" end rule; if all 4 pass immediately, the round-1 contract stands. Partner rule does not apply in round 2.
+- One more auction starting at `firstSeat`; any player may raise, minimum `max(24, currentBid + 1)`, or pass. Again one turn each (four turns); if all 4 pass, the round-1 contract stands. Partner rule does not apply in round 2.
 - If a *different* player wins round 2: old concealed card returns to old bidder's hand; new bidder enters `phase: "chooseTrump"` again and picks a concealed card from their 8 cards. If the same bidder raises, they keep their trump card.
 - After all 8 cards dealt, if any player holds all four Jacks → automatic redeal (same dealer). Check after deal 2 (before bidding2).
 
@@ -41,9 +42,9 @@ Do not edit files you don't own. If a contract seems wrong, follow it anyway and
 - `firstSeat` leads trick 1; trick winner leads next. Must follow suit if able.
 - **Phase one (trump concealed):**
   - A player (not bidder) unable to follow may either play any card (a discard — played face up, house rule; it does not reveal trump) or first take action `callTrump`: concealed card is revealed and moved into bidder's hand; trump is now revealed; the caller must then play a trump if they have one, otherwise any card.
-  - Bidder unable to follow a non-trump lead: may discard any **non-trump** card from hand, or `playTrumpCard` (reveal and play the concealed card, trump becomes revealed). Bidder may NOT play a trump-suit card from hand in this case. (If bidder's hand has only trump-suit cards, they may play one from hand as a plain discard.)
+  - Bidder unable to follow a non-trump lead: may discard any **non-trump** card from hand, or `playTrumpCard` (reveal and play the concealed card, trump becomes revealed), or `revealTrump` (reveal; the concealed card returns to their hand and they must then play a trump of their choice — any trump-suit card, with trump power). Bidder may NOT play a trump-suit card from hand in this case. (If bidder's hand has only trump-suit cards, they may play one from hand as a plain discard.)
   - Bidder leading: may not lead a trump-suit card unless hand holds only trump-suit cards (then it is led with no trump power, trump stays concealed). If bidder's hand is empty (trick 8, concealed card unplayed), bidder must `playTrumpCard`.
-  - When trump suit is led by someone else, bidder follows from hand if possible; if bidder has no trump-suit cards in hand they may play anything; they may also `playTrumpCard`.
+  - When trump suit is led by someone else, bidder follows from hand if possible; if bidder has no trump-suit cards in hand they may play anything; they may also `playTrumpCard` or `revealTrump`.
   - Trick winner in phase one: highest card of suit led.
 - **Phase two (trump revealed):** follow suit if able; otherwise any card. Bidder has no restrictions.
 - **Trick winner when trump revealed during or before this trick:** a card has trump power iff its suit == trump AND (it was played after the reveal, OR it was a non-following discard). Trump-suit cards that followed a trump lead before the reveal have no trump power. Highest trump-power card wins; else highest card of suit led.
@@ -52,7 +53,7 @@ Do not edit files you don't own. If a contract seems wrong, follow it anyway and
 ### Scoring
 - Bidding team needs card points ≥ bid.
 - Bid 14–19: made +1, failed −2. Bid 20–24: +2 / −3. Bid 25–28: +3 / −4. Applied to bidding team's game score only.
-- Match: room setting `targetScore` (default 6). Match ends when a team's score ≥ target (they win) or ≤ −target (they lose).
+- Match: room setting `targetScore` = each team's **starting points** (default 5; scores start at `[t, t]`). Each hand's result is **exchanged**: the bidding team gains the table value if made (the other team loses the same), or loses the failure value (the other team gains it). Totals always sum to `2t`. A team whose score drops **below zero** loses the match (exactly 0 is still alive). `handResult.delta` holds both teams' changes.
 - After the hand: `phase: "handEnd"`; `nextHand` action (any seated player; server also auto-advances after 8 s) deals the next hand. On match end: `phase: "matchEnd"`.
 
 ---
@@ -77,6 +78,7 @@ export function currentTurn(game)                // -> seat whose action is awai
 { type: "play", card }            // card from own hand
 { type: "callTrump" }             // non-bidder, cannot follow, trump concealed
 { type: "playTrumpCard" }         // bidder plays concealed card
+{ type: "revealTrump" }           // bidder reveals trump (card back to hand), then must play a trump of their choice
 { type: "nextHand" }              // phase handEnd
 ```
 
@@ -110,7 +112,7 @@ export function currentTurn(game)                // -> seat whose action is awai
   teamPoints: [n,n],           // card points captured this hand
   scores: [n,n], targetScore: number,
   legal: {                     // only meaningful when turn === mySeat; otherwise all empty/false
-    actions: ["bid","pass","redeal","chooseTrump","play","callTrump","playTrumpCard","nextHand"],  // subset
+    actions: ["bid","pass","redeal","chooseTrump","play","callTrump","playTrumpCard","revealTrump","nextHand"],  // subset
     minBid: number|null, maxBid: 28,
     playable: [card],          // cards legal to "play" right now
     trumpChoices: [card],      // for chooseTrump

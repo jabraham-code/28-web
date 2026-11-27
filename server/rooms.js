@@ -23,7 +23,7 @@ export const DEFAULT_OPTIONS = Object.freeze({
   maxNameLength: 20,
   maxChatLength: 200,
   minTargetScore: 1,
-  maxTargetScore: 52,
+  maxTargetScore: 20,
   iceServers: undefined,  // WebRTC ICE servers for voice chat; default: Google STUN + optional TURN_* env
   hint: undefined,        // async (view, names) => {action, reason}|null ; default: Claude when available
   turnTimers: [0, 20, 30, 45, 60], // allowed turn timer settings (seconds, 0 = off)
@@ -256,11 +256,11 @@ export class RoomManager {
     if (hints !== undefined && typeof hints !== 'boolean') return fail('Invalid hints setting');
     let t;
     if (targetScore !== undefined) {
-      // Target score changes the match itself, so lobby only. The rest may change any time.
+      // Starting points change the match itself, so lobby only. The rest may change any time.
       if (!this._isLobby(room)) return fail('Game in progress');
       t = Number(targetScore);
       if (!Number.isInteger(t) || t < this.opts.minTargetScore || t > this.opts.maxTargetScore) {
-        return fail(`Target score must be ${this.opts.minTargetScore}–${this.opts.maxTargetScore}`);
+        return fail(`Starting points must be ${this.opts.minTargetScore}–${this.opts.maxTargetScore}`);
       }
     }
     if (botBrain !== undefined) room.settings.botBrain = botBrain;
@@ -301,6 +301,7 @@ export class RoomManager {
     const clean = { type: action.type };
     if ('value' in action) clean.value = action.value;
     if ('card' in action) clean.card = action.card;
+    if ('trump' in action) clean.trump = action.trump;
     const res = this._apply(room, player.seat, clean);
     return res.ok ? ok() : fail(res.error || 'Illegal action');
   }
@@ -462,7 +463,7 @@ export class RoomManager {
       players: new Map(), // playerId -> player (humans + bots)
       seats: [null, null, null, null], // playerId | null
       status: 'lobby',
-      settings: { targetScore: 6, botBrain: 'classic', turnTimer: 45, hints: true },
+      settings: { targetScore: 5, botBrain: 'classic', turnTimer: 45, hints: true },
       history: { hands: [], matches: [], series: [0, 0] },
       game: null,
       botTimer: null,

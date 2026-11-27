@@ -18,6 +18,8 @@
 .score.mine { border-color: rgba(232, 193, 112, .35); }
 .s-top { display: flex; align-items: center; gap: 6px; font-size: .7rem; font-weight: 600; color: var(--ink-2); min-width: 0; }
 .s-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 14ch; }
+.s-pts { display: none; grid-column: 1 / -1; justify-self: start; padding: 0 7px; border-radius: 999px; background: rgba(255, 255, 255, .08); color: var(--ink-2); font-size: .72rem; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.s-pts b { color: var(--ink); font-size: .82rem; }
 .s-row { display: flex; align-items: baseline; gap: 4px; }
 .s-val { font-size: 1.25rem; font-weight: 800; font-variant-numeric: tabular-nums; display: inline-block; }
 .score.t0 .s-val { color: var(--team0); }
@@ -97,6 +99,11 @@
   background: radial-gradient(circle at 35% 30%, #fff5d6, var(--gold) 60%, var(--gold-lo)); border: 2px dashed rgba(90, 60, 10, .45);
   box-shadow: 0 2px 6px rgba(0, 0, 0, .4);
 }
+.bidder-chip {
+  position: absolute; right: 14px; bottom: -8px; height: 16px; padding: 0 6px; border-radius: 8px; z-index: 2;
+  display: grid; place-items: center; font-size: .58rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap;
+  color: #2b1d05; background: linear-gradient(180deg, var(--gold-hi), var(--gold)); box-shadow: 0 2px 6px rgba(0, 0, 0, .4);
+}
 /* timer ring (cosmetic): fills over 30 s while it's this seat's turn */
 .ring { position: absolute; inset: -4px; border-radius: 50%; pointer-events: none; opacity: 0; }
 .seat.turn .ring { opacity: 1; background: conic-gradient(var(--gold-hi) calc(var(--p) * 1%), rgba(232, 193, 112, .18) 0); -webkit-mask: radial-gradient(circle, transparent 62%, #000 64%); mask: radial-gradient(circle, transparent 62%, #000 64%); }
@@ -130,6 +137,21 @@
 .pos-right .say { right: calc(100% + 8px); top: 50%; transform: translateY(-50%); border-top-right-radius: 4px; }
 .pos-bottom .say { bottom: calc(100% + 8px); left: 0; border-bottom-left-radius: 4px; }
 
+/* "takes the trick" pill by the winner's plate (replaces the big centre announcement) */
+.trick-pill {
+  position: absolute; z-index: 7; pointer-events: none; white-space: nowrap;
+  padding: 4px 11px; border-radius: 999px; font-size: .78rem; font-weight: 700; color: var(--ink);
+  background: rgba(4, 22, 17, .92); border: 1px solid rgba(232, 193, 112, .55); box-shadow: 0 6px 16px rgba(0, 0, 0, .4);
+  animation: pill-in 1.9s var(--ease) forwards;
+}
+.trick-pill b { color: var(--gold-hi); margin-left: 2px; }
+.pos-top .trick-pill { top: calc(100% + 8px); left: 50%; translate: -50% 0; }
+.pos-bottom .trick-pill { bottom: calc(100% + 8px); left: 50%; translate: -50% 0; }
+.pos-left .trick-pill, .pos-right .trick-pill { bottom: calc(100% + 8px); }
+.pos-left .trick-pill { left: 0; }
+.pos-right .trick-pill { right: 0; }
+@keyframes pill-in { 0% { opacity: 0; transform: translateY(6px) scale(.9); } 14%, 80% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translateY(-4px); } }
+
 /* concealed trump in front of a bidder */
 .trump-slot { position: absolute; display: grid; justify-items: center; pointer-events: none; z-index: 2; }
 .trump-slot .card { transform: rotate(-8deg); box-shadow: 0 0 0 1.5px var(--gold), 0 6px 14px rgba(0, 0, 0, .4); animation: pop .35s var(--ease); }
@@ -156,7 +178,17 @@
   animation: annIn 2.2s var(--ease) forwards; font-size: 1rem;
 }
 .ann > span, .ann { flex-direction: column; }
-.ann.trump { flex-direction: row; }
+.ann.trump { flex-direction: row; border-color: rgba(247, 220, 149, .7); box-shadow: var(--shadow), 0 0 40px rgba(232, 193, 112, .35); padding: 12px 24px 12px 16px; font-size: 1.08rem; }
+.ann-suit { display: grid; place-items: center; width: 66px; height: 66px; border-radius: 50%; background: radial-gradient(circle, rgba(255, 252, 240, .95) 0 58%, rgba(232, 193, 112, .9) 60% 64%, transparent 66%); }
+.ann-suit .suit-ico.xl { width: 40px; height: 40px; }
+.ann-suit .suit-ico.black { fill: #17202a; }
+.ann-suit .suit-ico.red { fill: #c62839; }
+@media (prefers-reduced-motion: no-preference) {
+  .ann.trump .ann-suit { animation: suit-flip .7s var(--ease) both .08s; }
+  @keyframes suit-flip { 0% { transform: rotateY(90deg) scale(.6); } 60% { transform: rotateY(0) scale(1.18); } 100% { transform: none; } }
+}
+.trump-pop { animation: trump-pop 1.3s var(--ease); }
+@keyframes trump-pop { 0% { box-shadow: 0 0 0 0 rgba(247, 220, 149, .95); transform: scale(1); } 18% { transform: scale(1.12); } 100% { box-shadow: 0 0 0 22px rgba(247, 220, 149, 0); transform: scale(1); } }
 .ann.trump > span { display: grid; text-align: left; }
 .ann small { display: block; font-size: .78rem; color: var(--ink-3); margin-top: 2px; }
 @keyframes annIn { 0% { opacity: 0; transform: translateY(-8px) scale(.96); } 12%, 82% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translateY(-4px); } }
@@ -169,6 +201,9 @@
   background: linear-gradient(180deg, rgba(14, 50, 40, .9), rgba(5, 24, 19, .92));
 }
 .bid-panel.waiting { width: min(340px, calc(100% - 32px)); padding: 12px 16px; }
+.bid-panel[data-deal] { visibility: hidden; }
+.bp-main { display: grid; gap: 10px; }
+.bp-controls { display: grid; gap: 10px; }
 .bp-head { display: flex; justify-content: space-between; align-items: center; }
 .bp-round { font-size: .7rem; letter-spacing: .14em; text-transform: uppercase; font-weight: 800; color: var(--ink-2); }
 .bp-round.r2 { color: var(--gold-hi); }
@@ -178,7 +213,9 @@
 .bp-bid { font-family: var(--serif); font-size: 2.2rem; font-weight: 800; color: var(--gold-hi); line-height: 1; }
 .bp-by { font-size: .88rem; color: var(--ink-2); }
 .bp-none { font-size: .95rem; }
-.bp-history { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; max-height: 64px; overflow: auto; }
+.bp-history { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: nowrap; gap: 5px; justify-content: safe center; overflow: hidden; min-width: 0; }
+.bp-history .chip { flex: none; }
+.chip.more { color: var(--ink-3); font-weight: 700; }
 .chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 999px; font-size: .72rem; background: rgba(0, 0, 0, .3); border: 1px solid var(--line); }
 .chip.t0 { border-color: rgba(255, 143, 126, .35); }
 .chip.t1 { border-color: rgba(111, 200, 255, .35); }
@@ -188,16 +225,31 @@
 .bp-title { margin: 4px 0 0; font-family: var(--serif); font-size: 1.25rem; }
 .bp-sub { margin: -4px 0 0; font-size: .8rem; }
 .bp-wait { margin: 2px 0; font-size: .95rem; }
-.bid-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
-.bid-btn {
-  height: 42px; border-radius: 11px; border: 1px solid rgba(232, 193, 112, .3); cursor: pointer;
-  background: rgba(232, 193, 112, .08); color: var(--ink); font-weight: 800; font-size: 1.02rem; font-variant-numeric: tabular-nums;
-  transition: background .15s, transform .12s, border-color .15s;
+.bid-stepper { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 2px 0; }
+.step-btn {
+  width: 52px; height: 52px; border-radius: 50%; border: 1px solid rgba(232, 193, 112, .4); cursor: pointer;
+  background: rgba(232, 193, 112, .1); color: var(--gold-hi); font-size: 1.7rem; font-weight: 700; line-height: 1;
+  display: grid; place-items: center; touch-action: manipulation; user-select: none; -webkit-user-select: none;
+  transition: background .15s, transform .1s, border-color .15s, opacity .15s;
 }
-.bid-btn:hover { background: rgba(232, 193, 112, .25); border-color: var(--gold); transform: translateY(-2px); }
-.bid-btn:active { transform: scale(.96); }
-.bid-btn.hi { background: rgba(232, 193, 112, .14); }
-.bid-btn.top { background: rgba(232, 193, 112, .22); }
+.step-btn:hover:not(:disabled) { background: rgba(232, 193, 112, .24); border-color: var(--gold); }
+.step-btn:active:not(:disabled) { transform: scale(.92); }
+.step-btn:disabled { opacity: .3; cursor: default; }
+.step-btn:focus-visible { outline: 3px solid var(--gold-hi); outline-offset: 2px; }
+.step-num { display: grid; justify-items: center; min-width: 96px; }
+.step-value { font-family: var(--serif); font-size: 2.8rem; font-weight: 800; line-height: 1; color: var(--ink); font-variant-numeric: tabular-nums; }
+.step-value.hi { color: var(--gold); }
+.step-value.top { color: var(--gold-hi); }
+.step-stakes { font-size: .72rem; margin-top: 4px; white-space: nowrap; }
+.trump-pick-wrap { display: grid; justify-items: center; gap: 6px; }
+.tp-note { font-size: .74rem; }
+.tp-note b { color: var(--gold-hi); }
+.trump-pick { display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; }
+.trump-pick .card { --w: clamp(34px, calc(var(--cw) * .5), 50px); cursor: pointer; opacity: .82; transition: transform .18s var(--ease), box-shadow .18s, opacity .18s; }
+.trump-pick .card:hover { opacity: 1; transform: translateY(-3px); }
+.trump-pick .card.picked { opacity: 1; transform: translateY(-6px); box-shadow: 0 0 0 3px var(--gold-hi), 0 8px 18px rgba(0, 0, 0, .45); }
+.trump-pick .card:focus-visible { outline: 3px solid var(--gold-hi); outline-offset: 2px; }
+.bp-actions .btn .suit-ico, .bp-actions .btn svg { width: 1em; height: 1em; vertical-align: -2px; }
 .bp-actions { display: flex; gap: 8px; justify-content: center; }
 .bp-actions .btn { min-width: 110px; }
 .busy .bid-panel button, .busy .action-btns button { pointer-events: none; opacity: .7; }
@@ -211,7 +263,16 @@
 .status-text { font-size: .92rem; color: var(--ink-2); text-align: center; }
 .status-text b { color: var(--ink); }
 .my-area.my-turn .status-text b { color: var(--gold-hi); }
-.action-btns { display: flex; gap: 8px; }
+.action-btns { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.status-text.turn-pill { color: #2b1d05; padding: 5px 14px; border-radius: 999px; background: linear-gradient(180deg, var(--gold-hi), var(--gold)); box-shadow: 0 4px 16px rgba(232, 193, 112, .35); font-weight: 500; }
+.status-text.turn-pill b, .my-area.my-turn .status-text.turn-pill b { color: #2b1d05; font-weight: 800; }
+.status-text.turn-pill .suit-ico.black { fill: #17202a; }
+.status-text.turn-pill .suit-ico.red { fill: #b3192c; }
+.status-text.turn-pill [class$="-text"] { color: inherit; }
+/* subtle gold glow under my hand on my turn */
+.hand-row::before { content: ''; position: absolute; left: 50%; bottom: 0; width: min(760px, 96%); height: 75%; translate: -50% 0; pointer-events: none; border-radius: 50%;
+  background: radial-gradient(ellipse at 50% 100%, rgba(232, 193, 112, .28), rgba(232, 193, 112, .08) 45%, transparent 70%); opacity: 0; transition: opacity .4s; }
+.my-area.my-turn .hand-row::before { opacity: 1; }
 .action-btns .btn { animation: pop .3s var(--ease); }
 .spectator-note { text-align: center; font-size: .85rem; color: var(--ink-3); padding: 18px 0 24px; display: flex; gap: 8px; justify-content: center; align-items: center; }
 .spectator .hand-row { display: none; }
@@ -223,6 +284,11 @@
   animation: slideIn .28s var(--ease); background: linear-gradient(180deg, rgba(14, 50, 40, .94), rgba(5, 24, 19, .96));
 }
 @keyframes slideIn { from { opacity: 0; transform: translateX(20px); } }
+.drawer:has(> .drawer-turn:not([hidden])) { grid-template-rows: auto auto minmax(0, 1fr); }
+.drawer-turn {
+  margin: -2px 0 10px; min-height: 44px; border: 0; border-radius: 12px; cursor: pointer; font: 700 .92rem var(--font);
+  color: #2b1d05; background: linear-gradient(180deg, var(--gold-hi), var(--gold)); box-shadow: 0 4px 16px rgba(232, 193, 112, .35);
+}
 .drawer-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .drawer-head h3 { margin: 0; font-size: 1rem; }
 .log-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; display: grid; align-content: start; gap: 4px; font-size: .84rem; line-height: 1.4; }
@@ -231,10 +297,31 @@
 .log-card { font-weight: 700; color: var(--ink); padding: 0 3px; border-radius: 4px; background: rgba(255, 255, 255, .9); color: #17202a; font-size: .8em; }
 .log-card.red { color: #c62839; }
 .chat-box { min-height: 0; }
+.chat-drawer .chat-input { font-size: 16px; } /* >=16px avoids iOS focus zoom */
+/* compact HUD: Event log + Leave live in the "more" menu (phones only) */
+.more-menu .menu-compact { display: none; }
 
 /* ---------- responsive ---------- */
+/* Desktop & tablets in landscape: my plate sits beside my hand (out of the felt), the trick and
+   my bidding panel are centred in the felt area below the top player's plate. */
+@media (min-width: 861px) and (min-height: 561px) {
+  .felt { --clear: calc(var(--ocw) * 1.9 + 14px + 62px); }
+  /* --hn (cards in my hand) is set on #screen-game by table.js; hand step is .62 × card width here */
+  .seat.pos-bottom { position: fixed; top: auto; left: auto; bottom: calc(var(--cw) * .7 - 10px + env(safe-area-inset-bottom)); right: calc(50% + (var(--cw) * .62 * max(var(--hn, 8) - 1, 0) + var(--cw)) / 2 + var(--hc, 0) * var(--cw) * .54 + 30px); transition: right .35s var(--ease); }
+  .trick-area { top: calc(var(--clear) + (100% - var(--clear)) / 2); }
+  :root { --tcw: min(calc(var(--cw) * .86), 12.5vh); }
+  .announce { bottom: 8%; }
+  .bid-panel { top: calc(var(--clear) + 4px); bottom: 10px; height: fit-content; max-height: calc(100% - var(--clear) - 14px); margin: auto 0; transform: translateX(-50%); overflow-y: auto; }
+  .bid-panel.my-turn:has(.bp-main.has-pick) { width: min(660px, calc(100% - 40px)); }
+  .bp-main.has-pick { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); align-items: center; column-gap: 20px; }
+  .bp-main.has-pick > .trump-pick-wrap { order: 2; }
+  .bp-main.has-pick .trump-pick .card { --w: clamp(44px, calc(var(--cw) * .56), 58px); }
+  .bid-panel.my-turn { gap: 8px; padding: 14px 18px 16px; }
+}
+
 @media (max-width: 1100px) {
   .hand-pts { display: none; }
+  .s-pts:not([hidden]) { display: inline-block; }
 }
 @media (max-width: 860px) {
   .hud { grid-template-columns: auto 1fr auto; grid-template-areas: "left contract right" "scores scores scores"; row-gap: 6px; padding: 6px 10px; }
@@ -256,7 +343,9 @@
   .hud-contract { gap: 6px; justify-content: flex-end; }
   .hud-meta { display: flex; gap: 8px; align-items: baseline; }
   .hud-right { gap: 4px; }
-  .hud-right .icon-btn { width: 32px; height: 32px; }
+  .hud-right .icon-btn { width: 36px; height: 36px; }
+  .hud-right .hud-opt { display: none; }
+  .more-menu .menu-compact { display: flex; }
   .hud-left .brand-mark { display: none; }
   .cc-label { display: none; }
   .trump-badge small { display: none; }
@@ -281,20 +370,156 @@
   .pos-left .fan { transform: translate(calc(-50% - 30px), -50%) rotate(90deg); }
   .pos-right .fan { transform: translate(calc(-50% + 30px), -50%) rotate(-90deg); }
   .seat.pos-bottom { left: 8px; bottom: 8px; }
+  .bidder-chip { right: 50%; translate: 50% 0; bottom: -9px; height: 15px; font-size: .52rem; padding: 0 5px; }
+  .pos-bottom .bidder-chip { right: 14px; translate: none; }
+  /* concealed trump of a side player: tucked under its plate instead of beside it (beside overlaps the trick) */
+  .pos-left .trump-slot, .pos-right .trump-slot { left: 50%; right: auto; top: calc(100% + 10px); transform: translateX(-50%); }
+  .pos-left .trump-slot .card.mini, .pos-right .trump-slot .card.mini { --w: 20px; }
+  .pos-left .trump-slot .ts-label, .pos-right .trump-slot .ts-label { font-size: .5rem; padding: 0 4px; }
   .pos-bottom .plate { flex-direction: row; max-width: 150px; text-align: left; padding: 4px 10px 4px 4px; border-radius: 999px; }
   .pos-bottom .p-info { justify-items: start; }
-  .trick-area { top: 50%; width: calc(var(--tcw) * 3.1); height: calc(var(--tcw) * 3.3); }
+  .trick-area { top: 55%; width: calc(var(--tcw) * 3.1); height: calc(var(--tcw) * 3.3); }
   .trick-anchor.pos-left { left: 18%; }
   .trick-anchor.pos-right { left: 82%; }
   .say { max-width: 160px; font-size: .72rem; }
-  .bid-grid { grid-template-columns: repeat(5, 1fr); }
-  .bid-btn { height: 40px; }
-  .hand { --spread: clamp(3.5deg, calc(40deg / max(var(--n, 8), 1)), 7deg); }
-  .concealed-slot { position: absolute; right: 4px; bottom: 6px; margin: 0; }
+  .step-btn { width: 46px; height: 46px; }
+  .step-value { font-size: 2.4rem; }
+  /* full-width overlapped hand */
+  .my-area { padding: 4px 0 calc(env(safe-area-inset-bottom) + 4px); }
+  .action-bar { padding: 0 8px; gap: 8px; row-gap: 6px; }
+  .hand { --hw: calc(100vw - 16px); --cap: .8; --arc: 1.3px; --tilt: 1.8deg; }
+  .hand-row { height: calc(var(--cw) * 1.4 + 30px); position: static; }
+  .hand .card { bottom: 8px; }
+  /* my concealed trump: bottom-right corner of the felt (mirrors my plate on the left) */
+  .concealed-slot { position: absolute; right: 16px; bottom: calc(100% + 12px); margin: 0; z-index: 2; }
   .concealed-slot .card { --w: calc(var(--cw) * .7); }
-  .drawer { top: auto; height: min(70dvh, 520px); left: 8px; right: 8px; width: auto; bottom: 8px; }
+  /* reactions: above my plate instead of over the hand */
+  .my-area .react-wrap { left: 10px; bottom: calc(100% + 64px); }
+  .pos-bottom .bubble { left: calc(100% + 8px); bottom: 50%; transform: translateY(50%); } /* clear of the reaction button above */
+  .bid-panel.waiting { top: 63%; }
+  .drawer { top: auto; height: min(55dvh, 460px); left: 8px; right: 8px; width: auto; bottom: 8px; }
+
+  /* my bid: a bottom sheet in the thumb zone; the status/hint row floats just above it */
+  .bid-panel.my-turn {
+    position: fixed; left: 8px; right: 8px; bottom: calc(8px + env(safe-area-inset-bottom)); top: auto; transform: none;
+    width: auto; max-height: calc(100dvh - 150px); overflow-y: auto; padding: 12px 14px 14px; gap: 8px; z-index: 30;
+    border-radius: 20px; box-shadow: 0 -10px 40px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(255, 255, 255, .08);
+  }
+  .bid-panel.my-turn .bp-title { display: none; }
+  .bid-panel.my-turn .bp-current .bp-bid { font-size: 1.8rem; }
+  .bid-panel.my-turn .trump-pick { gap: 6px; }
+  .bid-panel.my-turn .trump-pick .card { --w: 58px; }
+  .bid-panel.my-turn .bp-actions .btn { flex: 1; min-height: 52px; font-size: 1.02rem; min-width: 0; }
+  .bid-panel.my-turn .bid-stepper { gap: 22px; }
+  .bid-panel.my-turn .step-btn { width: 52px; height: 52px; }
+  #screen-game:has(.bid-panel.my-turn:not([hidden]):not([data-deal])) .hand-row { display: none; }
+  #screen-game:has(.bid-panel.my-turn:not([hidden]):not([data-deal])) .my-area { z-index: auto; }
+  #screen-game:has(.bid-panel.my-turn:not([hidden]):not([data-deal])) .action-bar { position: fixed; z-index: 31; left: 8px; right: 8px; bottom: calc(var(--sheet-h, 0px) + 16px + env(safe-area-inset-bottom)); justify-content: center; }
+  #screen-game:has(.bid-panel.my-turn:not([hidden]):not([data-deal])) .action-bar .status-text { display: none; }
+  #screen-game:has(.bid-panel.my-turn:not([hidden]):not([data-deal])) .hint-box { position: fixed; z-index: 31; left: 8px; right: 8px; bottom: calc(var(--sheet-h, 0px) + 62px + env(safe-area-inset-bottom)); }
+  #screen-game:has(.bid-panel.my-turn:not([hidden]):not([data-deal])) .react-wrap { display: none; }
 }
+/* tablets in portrait: everything a size up, side players a little closer */
+@media (min-width: 700px) and (orientation: portrait) {
+  :root { --cw: clamp(84px, 11.5vw, 116px); --tcw: calc(var(--cw) * .88); --ocw: calc(var(--cw) * .46); }
+  .seat.pos-left, .seat.pos-right { top: 46%; }
+  .seat.pos-left { left: calc(var(--ocw) * 1.1 + 10px); }
+  .seat.pos-right { right: calc(var(--ocw) * 1.1 + 10px); }
+  .trick-area { top: 49%; }
+  .plate { max-width: 230px; }
+  .p-name { font-size: .95rem; }
+  .bid-panel.my-turn { width: min(520px, calc(100% - 48px)); }
+  .bid-panel .trump-pick .card { --w: 58px; }
+}
+/* phones in landscape: one-row HUD, hand overlaps the bottom of the felt */
 @media (max-height: 560px) and (orientation: landscape) {
-  :root { --cw: clamp(48px, 13vh, 70px); }
-  .hud { padding: 4px 10px; }
+  :root { --cw: clamp(48px, 18vh, 70px); --tcw: calc(var(--cw) * .74); --ocw: 20px; }
+  .hud { grid-template-columns: auto auto minmax(0, 1fr) auto; grid-template-areas: "left scores contract right"; gap: 8px; padding: 4px 10px; padding-top: max(4px, env(safe-area-inset-top)); padding-left: max(10px, env(safe-area-inset-left)); padding-right: max(10px, env(safe-area-inset-right)); }
+  .hud-left .brand-mark { display: none; }
+  .hud-meta { display: flex; gap: 6px; align-items: baseline; }
+  .hud-scores { gap: 6px; justify-content: flex-start; }
+  .score { min-width: 0; display: flex; align-items: center; gap: 6px; padding: 0 9px; height: 34px; }
+  .score .s-bar, .s-target { display: none; }
+  .s-val { font-size: 1.05rem; }
+  .s-pts:not([hidden]) { display: inline-block; }
+  .hud-contract { justify-content: flex-end; gap: 6px; }
+  .contract-chip, .trump-badge { height: 34px; padding: 0 8px; font-size: .74rem; }
+  .cc-label, .trump-badge small { display: none; }
+  .cc-by { max-width: 7ch; }
+  .hud-right { gap: 4px; }
+  .hud-right .icon-btn { width: 36px; height: 36px; }
+  .hud-right .hud-opt { display: none; }
+  .more-menu .menu-compact { display: flex; }
+  .brain-toggle span { display: none; }
+  .dealer-chip { left: auto; right: -6px; top: -6px; width: 19px; height: 19px; font-size: .6rem; }
+  .bidder-chip { bottom: -7px; height: 14px; font-size: .5rem; padding: 0 5px; }
+
+  .table-wrap { position: relative; grid-template-rows: minmax(0, 1fr); padding: 4px max(8px, env(safe-area-inset-right)) 4px max(8px, env(safe-area-inset-left)); }
+  .felt { width: 100%; border-radius: 40px / 32px; }
+  .felt::after { top: 38%; font-size: 70px; }
+  .seat.pos-top { top: 6px; }
+  .pos-top .fan { display: none; }
+  .seat.pos-left, .seat.pos-right { top: 35%; }
+  .seat.pos-left { left: calc(var(--ocw) * 1.3 + 8px); }
+  .seat.pos-right { right: calc(var(--ocw) * 1.3 + 8px); }
+  .seat.pos-bottom { left: 12px; bottom: 10px; }
+  .plate { padding: 3px 10px 3px 3px; gap: 6px; max-width: 170px; }
+  .plate .avatar { width: 32px; height: 32px; font-size: .78rem; }
+  .p-name { font-size: .78rem; }
+  .p-sub { font-size: .66rem; }
+
+  /* my hand + status float over the bottom of the felt */
+  .my-area { position: absolute; left: 0; right: 0; bottom: 0; padding: 0; pointer-events: none; display: block; }
+  .my-area > * { pointer-events: auto; }
+  .hand { --hw: calc(100vw - 380px); --cap: .82; --arc: 1px; --tilt: 1.6deg; }
+  .hand-row.has-concealed .hand { --hw: calc(100vw - 380px - var(--cw) * .72 - 10px); }
+  .hand-row { height: calc(var(--cw) * 1.4 + 22px); }
+  .hand .card { bottom: 5px; }
+  /* right column: status on top, then clock + buttons wrapping right-aligned */
+  .action-bar { position: absolute; right: max(12px, env(safe-area-inset-right)); bottom: 10px; width: min(28vw, 240px); max-width: none; flex-direction: row; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 5px; min-height: 0; }
+  .action-bar .status-text { flex: 1 0 100%; }
+  .action-btns { display: contents; }
+  .action-btns .btn { --bh: 36px; font-size: .8rem; padding: 0 .75em; }
+  .action-btns .hint-btn .hint-label { display: none; }
+  .status-text { font-size: .74rem; text-align: right; line-height: 1.3; }
+  .status-text.turn-pill { text-align: center; padding: 4px 10px; border-radius: 12px; }
+  .hint-box { position: absolute; right: max(14px, env(safe-area-inset-right)); bottom: calc(var(--cw) * 1.4 + 18px); max-width: 46%; font-size: .76rem; padding: 6px 10px; }
+  .my-area .react-wrap { left: 12px; bottom: 58px; }
+  .my-area .react-btn { width: 34px; height: 34px; }
+  .concealed-slot { margin: 0 0 6px 10px; }
+  .concealed-slot .card { --w: calc(var(--cw) * .72); }
+
+  .bid-panel { top: 40%; }
+  .bid-panel.my-turn { top: 6px; bottom: 6px; transform: translateX(-50%); width: min(560px, calc(100% - 24px)); max-height: none; overflow-y: auto; padding: 10px 14px; gap: 6px; align-content: start; }
+  .bid-panel.my-turn { grid-template-columns: 1fr 1fr; column-gap: 18px; grid-auto-flow: row dense; align-items: center; }
+  .bid-panel.my-turn > * { grid-column: 1 / -1; }
+  .bid-panel.my-turn .bp-main.has-pick { grid-template-columns: 1fr 1fr; column-gap: 18px; align-items: center; }
+  .bid-panel.my-turn .bp-main.has-pick > .trump-pick-wrap { order: 2; }
+  #screen-game:has(.bid-panel.my-turn:not([hidden]):not([data-deal])) .hand-row { visibility: hidden; }
+  #screen-game:has(.bid-panel.my-turn:not([hidden]):not([data-deal])) .action-bar .status-text { display: none; } /* panel says it */
+  .s-name { max-width: none; overflow: visible; }
+  .score, .score > * { flex: none; }
+  .hud-scores { min-width: 0; }
+  .trick-area { top: 44%; }
+  .bp-current .bp-bid { font-size: 1.5rem; }
+  .bp-title { display: none; }
+  .bid-stepper { gap: 10px; }
+  .step-btn { width: 44px; height: 44px; font-size: 1.4rem; }
+  .step-value { font-size: 2rem; }
+  .drawer { top: 8px; bottom: 8px; }
+}
+
+/* touch screens: bigger hit areas without growing the layout */
+@media (pointer: coarse) {
+  .hud .icon-btn::before { content: ''; position: absolute; top: calc(50% - 22px); bottom: calc(50% - 22px); left: calc(50% - 22px); right: calc(50% - 22px); }
+  .btn-sm { --bh: 40px; }
+  .my-area .react-btn { width: 40px; height: 40px; }
+  .my-area .react-btn::before { content: ''; position: absolute; inset: -2px; }
+}
+
+/* phones ≤380px: score.css shrinks HUD icons / hides the bidder name for a crowded row; with Event log
+   and Leave moved into the ⋯ menu there is room again, and the bidder label is now short ("You", "Arjun") */
+@media (max-width: 380px) {
+  #screen-game .hud-right .icon-btn.icon-btn { width: 36px; height: 36px; }
+  #screen-game .hud-contract .cc-by.cc-by { display: inline; max-width: 5ch; }
 }

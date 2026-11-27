@@ -17,12 +17,14 @@ const hasPointCard = (cards) => cards.some((c) => pointsOf(c) > 0);
 // ---------------------------------------------------------------------------
 
 /**
- * createGame({ targetScore = 6, dealer = random seat, rng = Math.random, decks })
+ * createGame({ targetScore = 5, dealer = random seat, rng = Math.random, decks })
  * `decks` (testing aid, optional): array of pre-arranged 32-card decks used for the
+ * `targetScore` is each team's STARTING points. Hand results are exchanged between the
+ * teams (winner gains what the loser gives up); a team that drops below zero loses the match.
  * next deals in order before falling back to rng shuffles. Deal layout: seat s receives
  * deck[4s..4s+3] in deal 1 and deck[16+4s..16+4s+3] in deal 2.
  */
-export function createGame({ targetScore = 6, dealer, rng = Math.random, decks } = {}) {
+export function createGame({ targetScore = 5, dealer, rng = Math.random, decks } = {}) {
   if (!Number.isInteger(targetScore) || targetScore < 1) throw new Error('targetScore must be a positive integer');
   if (dealer == null) dealer = Math.floor(rng() * 4);
   if (!isSeat(dealer)) throw new Error('dealer must be a seat 0..3');
@@ -34,7 +36,7 @@ export function createGame({ targetScore = 6, dealer, rng = Math.random, decks }
     seq: 0,
     phase: null,
     turn: null,
-    scores: [0, 0],
+    scores: [targetScore, targetScore],
     matchWinner: null,
     log: [],
     stackedDecks: (decks || []).map((d) => validateDeck([...d])),
@@ -74,7 +76,7 @@ function deal(game) {
   game.deck = deck.slice(16);
   game.phase = 'bidding1';
   game.turn = game.firstSeat;
-  game.bidding = { round: 1, currentBid: null, bidder: null, history: [], passesInRow: 0, bidsThisRound: 0 };
+  game.bidding = { round: 1, currentBid: null, bidder: null, history: [], passesInRow: 0, bidsThisRound: 0, turnsThisRound: 0, trumpPicks: {} };
   game.contract = null;
   game.trump = { suit: null, card: null, concealed: false, revealed: false, revealedBy: null, revealedInTrick: null };
   game.mustPlayTrump = null;
@@ -95,16 +97,19 @@ function dealSecond(game) {
 // Rules helpers
 // ---------------------------------------------------------------------------
 
+// Minimum bid to overcall your partner when the opponent in between passed.
+export const PARTNER_MIN = 18;
+
 function minBidFor(game, seat) {
   const b = game.bidding;
   let min;
   if (b.round === 1) {
     min = b.currentBid == null ? 14 : b.currentBid + 1;
-    // Partner rule: partner holds the bid and the player before me passed on their last turn.
+    // Partner rule: partner holds the bid and the opponent before me did not raise it.
     if (b.bidder != null && b.bidder === partnerOf(seat)) {
       const prev = (seat + 3) % 4;
       const lastPrev = [...b.history].reverse().find((h) => h.round === 1 && h.seat === prev);
-      if (lastPrev && lastPrev.bid === null) min = Math.max(min, 20);
+      if (lastPrev && lastPrev.bid === null) min = Math.max(min, PARTNER_MIN);
     }
   } else {
     min = Math.max(24, b.currentBid + 1);
@@ -214,7 +219,10 @@ function computeLegal(game, seat) {
       legal.playable = sortHand(game.hands[seat].filter((c) => playError(game, seat, c) === null));
       if (legal.playable.length) legal.actions.push('play');
       if (callTrumpError(game, seat) === null && game.mustPlayTrump !== seat) legal.actions.push('callTrump');
-      if (playTrumpCardError(game, seat) === null) legal.actions.push('playTrumpCard');
+      if (playTrumpCardError(game, seat) === null) {
+        legal.actions.push('playTrumpCard');
+        if (game.hands[seat].length) legal.actions.push('revealTrump'); // nothing to choose from with an empty hand
+      }
       break;
     }
   }
@@ -254,13 +262,14 @@ function dispatch(game, seat, action) {
   if (game.phase === 'handEnd') return 'The hand is over; waiting for next hand';
   if (game.turn !== seat) return 'Not your turn';
   switch (action.type) {
-    case 'bid': return doBid(game, seat, action.value);
+    case 'bid': return doBid(game, seat, action.value, action.trump);
     case 'pass': return doPass(game, seat);
     case 'redeal': return doRedeal(game, seat);
     case 'chooseTrump': return doChooseTrump(game, seat, action.card);
     case 'play': return doPlay(game, seat, action.card);
     case 'callTrump': return doCallTrump(game, seat);
     case 'playTrumpCard': return doPlayTrumpCard(game, seat);
+    case 'revealTrump': return doRevealTrump(game, seat);
     default: return `Unknown action type "${action.type}"`;
   }
 }
@@ -269,7 +278,7 @@ function inBidding(game) {
   return game.phase === 'bidding1' || game.phase === 'bidding2';
 }
 
-function doBid(game, seat, value) {
+function doBid(game, seat, value, trump) {
   if (!inBidding(game)) return 'Not in bidding';
   if (!Number.isInteger(value)) return 'Bid must be an integer';
   const min = minBidFor(game, seat);
@@ -277,14 +286,20 @@ function doBid(game, seat, value) {
   if (value > MAX_BID) return `Bid cannot exceed ${MAX_BID}`;
   if (value < min) return `Bid must be at least ${min}`;
   const b = game.bidding;
+  // Optional: name the trump card together with the bid (kept secret; applied if this bid wins).
+  if (trump != null) {
+    if (!isCard(trump)) return 'Invalid trump card';
+    if (!game.hands[seat].includes(trump)) return 'You do not hold that trump card';
+    if (b.round === 2 && game.contract && game.contract.bidder === seat) return 'You already have a trump card';
+    b.trumpPicks[seat] = trump;
+  } else delete b.trumpPicks[seat];
   b.currentBid = value;
   b.bidder = seat;
   b.history.push({ seat, round: b.round, bid: value });
   b.passesInRow = 0;
   b.bidsThisRound += 1;
   log(game, `Seat ${seat} bid ${value}`);
-  game.turn = next(seat);
-  return null;
+  return afterBidTurn(game, seat);
 }
 
 function doPass(game, seat) {
@@ -294,11 +309,14 @@ function doPass(game, seat) {
   b.history.push({ seat, round: b.round, bid: null });
   b.passesInRow += 1;
   log(game, `Seat ${seat} passed`);
-  if (b.round === 1) {
-    if (b.passesInRow >= 3) return endRound1(game);
-  } else if ((b.bidsThisRound === 0 && b.passesInRow >= 4) || (b.bidsThisRound > 0 && b.passesInRow >= 3)) {
-    return endRound2(game);
-  }
+  return afterBidTurn(game, seat);
+}
+
+// Each deal has a single bidding round: every player gets exactly one turn.
+function afterBidTurn(game, seat) {
+  const b = game.bidding;
+  b.turnsThisRound += 1;
+  if (b.turnsThisRound >= 4) return b.round === 1 ? endRound1(game) : endRound2(game);
   game.turn = next(seat);
   return null;
 }
@@ -317,6 +335,15 @@ function endRound1(game) {
   log(game, `Seat ${b.bidder} wins the first round at ${b.currentBid}`);
   game.phase = 'chooseTrump';
   game.turn = b.bidder;
+  return applyTrumpPick(game);
+}
+
+/** If the winning bidder named a trump card with their bid, place it now. */
+function applyTrumpPick(game) {
+  const b = game.bidding;
+  const card = b.trumpPicks[b.bidder];
+  b.trumpPicks = {};
+  if (card && game.hands[b.bidder].includes(card)) return doChooseTrump(game, b.bidder, card);
   return null;
 }
 
@@ -331,7 +358,7 @@ function endRound2(game) {
     game.trump = { suit: null, card: null, concealed: false, revealed: false, revealedBy: null, revealedInTrick: null };
     game.phase = 'chooseTrump';
     game.turn = b.bidder;
-    return null;
+    return applyTrumpPick(game);
   }
   startPlay(game);
   return null;
@@ -359,6 +386,8 @@ function doChooseTrump(game, seat, card) {
     b.round = 2;
     b.passesInRow = 0;
     b.bidsThisRound = 0;
+    b.turnsThisRound = 0;
+    b.trumpPicks = {};
     game.phase = 'bidding2';
     game.turn = game.firstSeat;
     return null;
@@ -422,6 +451,21 @@ function doPlayTrumpCard(game, seat) {
   return null;
 }
 
+/**
+ * Bidder reveals the concealed trump without committing to it: the card goes
+ * back into their hand and they must now play a trump of their choice.
+ */
+function doRevealTrump(game, seat) {
+  if (game.phase === 'playing' && seat === game.contract.bidder && game.hands[seat].length === 0) return 'Play your concealed trump card';
+  const err = playTrumpCardError(game, seat);
+  if (err) return err.replace('play the concealed trump card', 'reveal trump');
+  reveal(game, seat);
+  game.hands[seat].push(game.trump.card);
+  log(game, `Seat ${seat} revealed the trump card ${game.trump.card} (trump ${game.trump.suit})`);
+  game.mustPlayTrump = seat;
+  return null;
+}
+
 /** Index into trick.cards of the winning entry. Exported for tests. */
 export function trickWinnerIndex(cards, trumpSuit, trumpRevealed) {
   const led = suitOf(cards[0].card);
@@ -475,11 +519,13 @@ function scoreHand(game) {
   const made = game.teamPoints[bt] >= bid;
   const delta = [0, 0];
   delta[bt] = scoreDelta(bid, made);
-  game.scores[bt] += delta[bt];
+  delta[1 - bt] = -delta[bt]; // points are exchanged between the teams
+  game.scores[0] += delta[0];
+  game.scores[1] += delta[1];
   game.handResult = { bid, bidder, biddingTeam: bt, teamPoints: [...game.teamPoints], made, delta };
   log(game, `Team ${bt} ${made ? 'made' : 'failed'} ${bid} with ${game.teamPoints[bt]} points (${delta[bt] > 0 ? '+' : ''}${delta[bt]})`);
-  if (game.scores[bt] >= game.targetScore) game.matchWinner = bt;
-  else if (game.scores[bt] <= -game.targetScore) game.matchWinner = 1 - bt;
+  if (game.scores[0] < 0) game.matchWinner = 1;
+  else if (game.scores[1] < 0) game.matchWinner = 0;
   game.turn = null;
   if (game.matchWinner != null) {
     game.phase = 'matchEnd';
@@ -514,6 +560,7 @@ export function getView(game, seat) {
       bidder: game.bidding.bidder,
       history: game.bidding.history.map((h) => ({ ...h })),
     },
+    mustPlayTrump: game.mustPlayTrump,
     contract: game.contract ? { ...game.contract } : null,
     trump: {
       concealed: t.concealed,

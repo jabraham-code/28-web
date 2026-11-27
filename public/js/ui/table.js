@@ -1,10 +1,11 @@
 // Game table: HUD, seats/plates, hands, trick area, action bar, drawers, and state-diff animations.
-import { h, $, esc, POS, posOf, seatName, teamOf, initials, mapSeatNames, teamLabel, hash, suitOf, SUIT_NAMES, reducedMotion, botBadge, SPARKLE } from './util.js';
+import { h, $, esc, POS, posOf, seatName, teamOf, initials, mapSeatNames, teamLabel, hash, suitOf, SUIT_NAMES, reducedMotion, botBadge, SPARKLE, cardName, rankOf, pointsOf } from './util.js';
 import { createCard, createBack, setCard, suitIcon } from './cards.js';
 import { flyFrom, flyTo, dealFlights, pulse } from './anim.js';
 import { renderBidding, trumpBadgeHTML } from './bidding.js';
 import { mountChat, markRead } from './chat.js';
 import { botIcon } from './lobby.js';
+import { renderHudScore } from './score.js';
 
 const HOLD_MS = 1300;
 const SWEEP_MS = 520;
@@ -19,7 +20,6 @@ export function mountTable(root, ctx) {
         <div class="hud-meta"><span class="room-tag" title="Room code"></span><span class="hand-no"></span></div>
       </div>
       <div class="hud-scores" aria-label="Match score — open scoreboard" role="button" tabindex="0" title="Open scoreboard">
-        ${[0, 1].map((t) => `<div class="score t${t}"><div class="s-top"><span class="team-dot t${t}"></span><span class="s-name"></span></div><div class="s-row"><span class="s-val">0</span><span class="s-target"></span></div><div class="s-bar" aria-hidden="true"><i></i></div></div>`).join('')}
       </div>
       <div class="hud-contract">
         <div class="contract-chip" aria-live="polite"></div>
@@ -28,7 +28,7 @@ export function mountTable(root, ctx) {
       </div>
       <div class="hud-right">
         <button class="btn btn-ghost btn-xs brain-toggle" type="button" data-act="brain" hidden></button>
-        <button class="icon-btn" type="button" data-act="log" aria-label="Event log" aria-expanded="false"><svg viewBox="0 0 24 24" class="ico"><path d="M5 6h14M5 12h14M5 18h9" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></button>
+        <button class="icon-btn hud-opt" type="button" data-act="log" aria-label="Event log" aria-expanded="false"><svg viewBox="0 0 24 24" class="ico"><path d="M5 6h14M5 12h14M5 18h9" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></button>
         <button class="icon-btn" type="button" data-act="chat" aria-label="Chat" aria-expanded="false"><svg viewBox="0 0 24 24" class="ico"><path d="M4 5h16v11H9l-5 4z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/></svg><span class="badge" hidden></span></button>
         <div class="more-wrap">
           <button class="icon-btn" type="button" data-act="more" aria-label="More options" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 24 24" class="ico"><circle cx="5" cy="12" r="1.8" fill="currentColor"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><circle cx="19" cy="12" r="1.8" fill="currentColor"/></svg></button>
@@ -36,9 +36,11 @@ export function mountTable(root, ctx) {
             <button type="button" role="menuitem" data-act="scoreboard"><svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg>Scoreboard</button>
             <button type="button" role="menuitemcheckbox" data-act="sound" aria-checked="true"><svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path class="snd-on" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/><path class="snd-off" d="M17 9l5 6M22 9l-5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg><span class="snd-label">Sound &amp; vibration: on</span></button>
             <button type="button" role="menuitem" data-act="rules"><svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" fill="none"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .9-1 1.7M12 17h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>How to play</button>
+            <button type="button" role="menuitem" class="menu-compact" data-act="log"><svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M5 6h14M5 12h14M5 18h9" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>Event log</button>
+            <button type="button" role="menuitem" class="menu-compact" data-act="leave"><svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>Leave room</button>
           </div>
         </div>
-        <button class="icon-btn" type="button" data-act="leave" aria-label="Leave room"><svg viewBox="0 0 24 24" class="ico"><path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></button>
+        <button class="icon-btn hud-opt" type="button" data-act="leave" aria-label="Leave room"><svg viewBox="0 0 24 24" class="ico"><path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></button>
       </div>
     </header>
     <div class="table-wrap">
@@ -65,7 +67,8 @@ export function mountTable(root, ctx) {
           <div class="action-btns">
             <button class="btn btn-ghost btn-sm hint-btn" type="button" data-act="hint" hidden><span aria-hidden="true">💡</span><span class="hint-label">Hint</span></button>
             <button class="btn btn-gold btn-sm" type="button" data-act="callTrump" hidden>Call trump</button>
-            <button class="btn btn-gold btn-sm" type="button" data-act="playTrumpCard" hidden>Play concealed trump</button>
+            <button class="btn btn-gold btn-sm" type="button" data-act="revealTrump" hidden title="Turn up your trump card, then choose which trump to play">Reveal trump</button>
+            <button class="btn btn-ghost btn-sm" type="button" data-act="playTrumpCard" hidden title="Play your face-down trump card into this trick">Play hidden trump</button>
           </div>
         </div>
         <div class="hint-box" role="status" hidden></div>
@@ -81,10 +84,12 @@ export function mountTable(root, ctx) {
       </div>
     </div>
     <aside class="drawer log-drawer glass" aria-label="Event log" hidden>
+      <button class="drawer-turn" type="button" data-act="drawer-return" hidden>Your turn — tap to return</button>
       <div class="drawer-head"><h3>Event log</h3><button class="icon-btn" type="button" data-act="log" aria-label="Close log">×</button></div>
       <ol class="log-list"></ol>
     </aside>
     <aside class="drawer chat-drawer glass" aria-label="Chat" hidden>
+      <button class="drawer-turn" type="button" data-act="drawer-return" hidden>Your turn — tap to return</button>
       <div class="drawer-head"><h3>Chat</h3><button class="icon-btn" type="button" data-act="chat" aria-label="Close chat">×</button></div>
       <div class="chat-box"></div>
     </aside>`;
@@ -115,8 +120,9 @@ export function mountTable(root, ctx) {
     const b = e.target.closest('button');
     if (!b) return;
     const act = b.dataset.act;
-    if (act === 'log') toggleDrawer(logDrawer, b);
+    if (act === 'log') { closeMenus(); toggleDrawer(logDrawer, b); }
     else if (act === 'chat') toggleDrawer(chatDrawer, b);
+    else if (act === 'drawer-return') { setDrawer(logDrawer, false); setDrawer(chatDrawer, false); }
     else if (act === 'rules') { closeMenus(); ctx.rules(); }
     else if (act === 'more') { const m = q('.more-menu'); const open = m.hidden; closeMenus(); m.hidden = !open; b.setAttribute('aria-expanded', String(open)); }
     else if (act === 'scoreboard') { closeMenus(); ctx.scoreboard(); }
@@ -124,10 +130,11 @@ export function mountTable(root, ctx) {
     else if (act === 'hint') askHint(b);
     else if (act === 'react') { const pop = q('.react-pop'); const open = pop.hidden; closeMenus(); pop.hidden = !open; b.setAttribute('aria-expanded', String(open)); }
     else if (b.dataset.emoji) { closeMenus(); ctx.react(b.dataset.emoji); }
-    else if (act === 'leave') ctx.leave(true);
+    else if (act === 'leave') { closeMenus(); ctx.leave(true); }
     else if (act === 'brain') ctx.call('setSettings', { botBrain: room.settings.botBrain === 'claude' ? 'classic' : 'claude' });
     else if (act === 'callTrump') doAct({ type: 'callTrump' });
     else if (act === 'playTrumpCard') doAct({ type: 'playTrumpCard' });
+    else if (act === 'revealTrump') doAct({ type: 'revealTrump' });
   });
   root.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
@@ -136,16 +143,38 @@ export function mountTable(root, ctx) {
       else if (!logDrawer.hidden) toggleDrawer(logDrawer);
     }
   });
+  // Touch: first tap selects (lifts) a card, a second tap on the same card plays it; tapping
+  // anywhere else deselects. Mouse clicks and keyboard activation play immediately.
+  let lastPointer = '';
+  let selected = null; // card element currently lifted (touch only)
+  const coarse = matchMedia('(pointer: coarse)');
+  root.addEventListener('pointerdown', (e) => { lastPointer = e.pointerType; }, true);
+  const touchSelect = (e) => e.detail !== 0 && (lastPointer ? lastPointer === 'touch' : coarse.matches);
+  function select(el) {
+    if (selected === el) return;
+    if (selected) selected.classList.remove('selected');
+    selected = el;
+    if (el) el.classList.add('selected');
+    if (room?.game) renderActionBar(room, room.game);
+  }
+  function tapOrPlay(e, el, action) {
+    if (touchSelect(e) && selected !== el) { select(el); return; }
+    select(null);
+    doAct(action);
+  }
   handEl.addEventListener('click', (e) => {
     const c = e.target.closest('.card');
     if (!c || !room?.game) return;
     const card = c.dataset.card;
-    if (c.classList.contains('playable')) doAct({ type: 'play', card });
-    else if (c.classList.contains('choosable')) doAct({ type: 'chooseTrump', card });
+    if (c.classList.contains('playable')) tapOrPlay(e, c, { type: 'play', card });
+    else if (c.classList.contains('choosable')) tapOrPlay(e, c, { type: 'chooseTrump', card });
+    else select(null);
   });
   concealedEl.addEventListener('click', (e) => {
-    if (e.target.closest('.card.playable')) doAct({ type: 'playTrumpCard' });
+    const c = e.target.closest('.card.playable');
+    if (c) tapOrPlay(e, c, { type: 'playTrumpCard' });
   });
+  document.addEventListener('click', (e) => { if (selected && !e.target.closest('.hand .card, .concealed-slot .card')) select(null); });
 
   const REACTIONS = ['👍', '😂', '😮', '😡', '🔥', '👏', '🙏', '😢'];
   q('.react-pop').innerHTML = REACTIONS.map((e) => `<button type="button" role="menuitem" data-emoji="${e}" aria-label="React ${e}">${e}</button>`).join('');
@@ -188,11 +217,15 @@ export function mountTable(root, ctx) {
       renderActionBar(room, room.game);
     }
   }
-  function hintTarget(a) {
+  function hintTarget(a, apply = false) {
     if (a.type === 'play' || a.type === 'chooseTrump') return handEl.querySelector(`.card[data-card="${a.card}"]`) || bidPanel.querySelector(`.card[data-card="${a.card}"]`);
     if (a.type === 'playTrumpCard') return concealedEl.querySelector('.card') || q('[data-act="playTrumpCard"]');
     if (a.type === 'callTrump') return q('[data-act="callTrump"]');
-    if (a.type === 'bid') return bidPanel.querySelector(`[data-hint="bid:${a.value}"]`);
+    if (a.type === 'revealTrump') return q('[data-act="revealTrump"]');
+    if (a.type === 'bid') {
+      if (apply) bidPanel._setBid?.(a.value); // dial the stepper to the suggested bid
+      return bidPanel.querySelector('[data-hint="bid"]');
+    }
     return bidPanel.querySelector(`[data-hint="${a.type}"]`);
   }
   function showHint(res) {
@@ -200,7 +233,7 @@ export function mountTable(root, ctx) {
     const box = q('.hint-box');
     box.innerHTML = `<span class="hb-ico" aria-hidden="true">💡</span><span><b>${esc(res.label)}</b>${res.reason ? ` — ${esc(res.reason)}` : ''}</span><span class="hb-src">${res.source === 'claude' ? `${SPARKLE} Claude` : 'Bot'}</span>`;
     box.hidden = false;
-    hintTarget(res.action)?.classList.add('hinted');
+    hintTarget(res.action, true)?.classList.add('hinted');
   }
   function clearHint() {
     q('.hint-box').hidden = true;
@@ -230,7 +263,7 @@ export function mountTable(root, ctx) {
   function setDrawer(d, show) {
     d.hidden = !show;
     const which = d === logDrawer ? 'log' : 'chat';
-    root.querySelectorAll(`.hud [data-act="${which}"]`).forEach((b) => b.setAttribute('aria-expanded', String(show)));
+    root.querySelectorAll(`.hud .icon-btn[data-act="${which}"]`).forEach((b) => b.setAttribute('aria-expanded', String(show)));
     root.classList.toggle(`${which}-open`, show);
     if (show && d === chatDrawer) { markRead(); setTimeout(() => chatBox.input.focus(), 50); }
     if (show && d === logDrawer) { const l = q('.log-list'); l.scrollTop = l.scrollHeight; }
@@ -290,7 +323,10 @@ export function mountTable(root, ctx) {
     renderBubbles(r, g, P);
     if (hintSeq !== null && hintSeq !== g.seq) { hintSeq = null; lastHint = null; clearHint(); }
     renderActionBar(r, g);
+    if (dealInfo && !reducedMotion()) dealUntil = performance.now() + dealTotal(dealInfo);
     renderBidding(bidPanel, r, ctx);
+    deferPanelForDeal();
+    if (bidPanelOpen()) { clearTimeout(announceTimer); q('.announce').innerHTML = ''; }
     if (hintSeq === g.seq && lastHint) hintTarget(lastHint.action)?.classList.add('hinted'); // panels may have re-rendered
     felt.dataset.phase = g.phase;
     renderTrick(r, g, P, snap, first);
@@ -304,21 +340,7 @@ export function mountTable(root, ctx) {
   function renderHud(r, g) {
     q('.room-tag').textContent = r.code;
     q('.hand-no').textContent = `Hand ${g.handNumber}`;
-    const myTeam = r.you.seat != null ? teamOf(r.you.seat) : null;
-    for (const t of [0, 1]) {
-      const el = q(`.score.t${t}`);
-      $('.s-name', el).textContent = myTeam == null ? teamLabel(r, t) : t === myTeam ? 'Us' : 'Them';
-      el.title = teamLabel(r, t);
-      const v = $('.s-val', el);
-      if (v.textContent !== String(g.scores[t])) { v.textContent = g.scores[t]; if (prev) pulse(v, 'bump'); }
-      $('.s-target', el).textContent = `/ ${g.targetScore}`;
-      const pct = Math.max(-1, Math.min(1, g.scores[t] / g.targetScore));
-      const bar = $('.s-bar i', el);
-      bar.style.width = `${Math.abs(pct) * 50}%`;
-      bar.style.left = pct >= 0 ? '50%' : `${50 - Math.abs(pct) * 50}%`;
-      bar.classList.toggle('neg', pct < 0);
-      el.classList.toggle('mine', t === myTeam);
-    }
+    renderHudScore(q('.hud-scores'), r, g, { animate: !!prev }); // tug-of-war score + card points (ui/score.js)
     const bt = q('.brain-toggle');
     const hasBots = r.seats.some((p) => p && (p.isBot || p.botControlled));
     bt.hidden = !(r.you.isHost && r.settings?.claudeAvailable && hasBots);
@@ -329,10 +351,13 @@ export function mountTable(root, ctx) {
     bt.title = `Bots use ${claudeOn ? 'Claude AI' : 'classic rules'} \u2014 click to switch to ${claudeOn ? 'classic' : 'Claude AI'}`;
     const c = g.contract;
     const cc = q('.contract-chip');
+    // short bidder label: "You", or the name without a "Bot " prefix (phones show ~6 characters)
+    const shortName = (seat) => (seat === r.you.seat ? 'You' : seatName(r, seat).replace(/^Bot\s+/i, ''));
+    const ccBy = (seat) => `<span class="cc-by" title="${esc(seatName(r, seat))}">${esc(shortName(seat))}</span>`;
     const ccHtml = c
-      ? `<span class="cc-label">Contract</span><b class="t${teamOf(c.bidder)}-text">${c.bid}</b><span class="cc-by">${esc(seatName(r, c.bidder))}</span>`
+      ? `<span class="cc-label">Contract</span><b class="t${teamOf(c.bidder)}-text">${c.bid}</b>${ccBy(c.bidder)}`
       : g.bidding?.currentBid != null
-        ? `<span class="cc-label">High bid</span><b class="t${teamOf(g.bidding.bidder)}-text">${g.bidding.currentBid}</b><span class="cc-by">${esc(seatName(r, g.bidding.bidder))}</span>`
+        ? `<span class="cc-label">High bid</span><b class="t${teamOf(g.bidding.bidder)}-text">${g.bidding.currentBid}</b>${ccBy(g.bidding.bidder)}`
         : '<span class="cc-label">Contract</span><span class="cc-by muted">bidding…</span>';
     if (cc.dataset.html !== ccHtml) { cc.dataset.html = ccHtml; cc.innerHTML = ccHtml; }
     const tb = q('.trump-badge');
@@ -353,7 +378,7 @@ export function mountTable(root, ctx) {
       const isTurn = g.turn === seat;
       seatEl.dataset.seat = seat;
       seatEl.className = `seat pos-${POS[pos]} t${teamOf(seat)}${isTurn ? ' turn' : ''}`;
-      const key = [seat, name, p?.isBot, p?.botControlled, p?.ai, p?.connected, g.dealer === seat, g.tricksWon?.[seat], r.you.seat === seat, g.contract?.bidder === seat].join('|');
+      const key = [seat, name, p?.isBot, p?.botControlled, p?.ai, p?.connected, g.dealer === seat, g.tricksWon?.[seat], r.you.seat === seat, g.contract?.bidder === seat, g.contract?.bidder === seat && g.contract.bid].join('|');
       if (plate.dataset.key !== key) {
         plate.dataset.key = key;
         plate.innerHTML = `
@@ -361,11 +386,12 @@ export function mountTable(root, ctx) {
           <div class="p-info">
             <div class="p-name">${esc(name)}${r.you.seat === seat ? ' <span class="you">(you)</span>' : ''}</div>
             <div class="p-sub">${r.you.seat === seat ? '' : `<span class="p-count" title="Cards in hand"><svg viewBox="0 0 16 16" class="ico" aria-hidden="true"><rect x="4" y="2" width="8" height="12" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>${g.handCounts?.[seat] ?? 0}</span>`}<span class="tricks" title="Tricks won"><svg viewBox="0 0 16 16" class="ico" aria-hidden="true"><rect x="3" y="2" width="8" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="6" y="4" width="7" height="10" rx="1.5" fill="currentColor" opacity=".5"/></svg>${g.tricksWon?.[seat] ?? 0}</span>
-              ${botBadge(p)}${p && p.connected === false && !p.botControlled ? '<span class="tag tag-off">Offline</span>' : ''}${g.contract?.bidder === seat ? '<span class="tag tag-bidder">Bidder</span>' : ''}</div>
+              ${botBadge(p)}${p && p.connected === false && !p.botControlled ? '<span class="tag tag-off">Offline</span>' : ''}</div>
           </div>
           ${g.dealer === seat ? '<span class="dealer-chip" title="Dealer">D</span>' : ''}
+          ${g.contract?.bidder === seat ? `<span class="bidder-chip" title="Bidder — contract ${g.contract.bid}">Bid ${g.contract.bid}</span>` : ''}
           <span class="thinking" aria-hidden="true"><i></i><i></i><i></i></span>`;
-        plate.setAttribute('aria-label', `${name}${g.dealer === seat ? ', dealer' : ''}, ${g.tricksWon?.[seat] ?? 0} tricks${p?.connected === false ? ', disconnected' : ''}`);
+        plate.setAttribute('aria-label', `${name}${g.dealer === seat ? ', dealer' : ''}${g.contract?.bidder === seat ? `, bidder (${g.contract.bid})` : ''},${g.tricksWon?.[seat] ?? 0} tricks${p?.connected === false ? ', disconnected' : ''}`);
       }
       plate.classList.toggle('offline', !!p && p.connected === false);
       const thinking = isTurn && !!p && (p.isBot || p.botControlled) && p.ai === 'claude' && ['bidding1', 'bidding2', 'chooseTrump', 'playing'].includes(g.phase);
@@ -450,13 +476,20 @@ export function mountTable(root, ctx) {
       el.tabIndex = isP || isC ? 0 : -1;
     });
     handEl.style.setProperty('--n', cards.length);
+    root.style.setProperty('--hn', cards.length); // desktop: my plate hugs the hand's left edge
     handEl.classList.toggle('my-turn', canPlay);
+    if (selected && !(selected.isConnected && (selected.classList.contains('playable') || selected.classList.contains('choosable')))) {
+      selected.classList.remove('selected');
+      selected = null;
+    }
   }
 
   function renderConcealed(r, g) {
     const t = g.trump || {};
     const mine = r.you.seat != null && g.contract?.bidder === r.you.seat && t.concealed && t.card;
     concealedEl.hidden = !mine;
+    q('.hand-row').classList.toggle('has-concealed', !!mine);
+    root.style.setProperty('--hc', mine ? 1 : 0); // concealed card beside the hand shifts it left (desktop plate offset)
     if (!mine) { concealedEl.replaceChildren(); return; }
     const can = g.turn === r.you.seat && (g.legal?.actions || []).includes('playTrumpCard');
     let el = concealedEl.querySelector('.card');
@@ -466,6 +499,7 @@ export function mountTable(root, ctx) {
     }
     el.classList.toggle('playable', can);
     el.disabled = !can;
+    if (!can && selected === el) { el.classList.remove('selected'); selected = null; }
     el.setAttribute('aria-label', `Your concealed trump card, ${SUIT_NAMES[t.suit] || ''}${can ? ' — click to play it' : ''}`);
   }
 
@@ -504,12 +538,13 @@ export function mountTable(root, ctx) {
     const myTurn = me != null && g.turn === me;
     const acts = myTurn ? g.legal?.actions || [] : [];
     const hb = q('[data-act="hint"]');
-    const decide = ['bid', 'pass', 'chooseTrump', 'play', 'callTrump', 'playTrumpCard'].some((a) => acts.includes(a));
+    const decide = ['bid', 'pass', 'chooseTrump', 'play', 'callTrump', 'playTrumpCard', 'revealTrump'].some((a) => acts.includes(a));
     hb.hidden = !(r.settings?.hints && decide);
     if (!hb.classList.contains('busy')) hb.disabled = hintSeq === g.seq;
     q('.react-wrap').hidden = !['playing', 'bidding1', 'bidding2', 'chooseTrump', 'handEnd', 'matchEnd'].includes(g.phase);
     q('[data-act="callTrump"]').hidden = !acts.includes('callTrump');
     q('[data-act="playTrumpCard"]').hidden = !acts.includes('playTrumpCard');
+    q('[data-act="revealTrump"]').hidden = !acts.includes('revealTrump');
     let s = '';
     const nm = (seat) => `<span class="t${teamOf(seat)}-text">${esc(seatName(r, seat))}</span>`;
     if (g.phase === 'playing') {
@@ -517,6 +552,8 @@ export function mountTable(root, ctx) {
       const leadSuit = lead?.card ? suitOf(lead.card) : null;
       if (myTurn) {
         if (acts.includes('playTrumpCard') && !(g.legal.playable || []).length) s = '<b>Your turn</b> — you must play your concealed trump';
+        else if (g.mustPlayTrump === r.you.seat && g.trump?.suit) s = `<b>Your turn</b> — trump is ${suitIcon(g.trump.suit)}: play a trump`;
+        else if (acts.includes('revealTrump')) s = `<b>Your turn</b> — ${leadSuit && leadSuit !== g.trump?.suit ? `no ${SUIT_NAMES[leadSuit].toLowerCase()}: discard, or ` : ''}reveal trump and choose one`;
         else if (!lead) s = '<b>Your lead</b> — play any highlighted card';
         else if (acts.includes('callTrump')) s = `<b>Your turn</b> — no ${leadSuit ? SUIT_NAMES[leadSuit].toLowerCase() : 'cards of the led suit'}: discard or call trump`;
         else s = `<b>Your turn</b>${leadSuit ? ` — ${suitIcon(leadSuit)} led` : ''}`;
@@ -527,9 +564,17 @@ export function mountTable(root, ctx) {
       s = myTurn ? '<b>Pick your trump card</b>' : `${nm(g.turn)} is choosing trump<span class="dots"></span>`;
     } else if (g.phase === 'handEnd') s = 'Hand complete';
     else if (g.phase === 'matchEnd') s = 'Match over';
+    if (myTurn && selected?.isConnected) {
+      const sc = selected.closest('.concealed-slot') ? 'your hidden trump' : esc(cardName(selected.dataset.card));
+      s = `<b>Tap again to play</b> — ${sc}`;
+    }
     const st = q('.status-text');
     if (st.dataset.html !== s) { st.dataset.html = s; st.innerHTML = s; }
-    q('.my-area').classList.toggle('my-turn', myTurn && g.phase === 'playing');
+    const myPlay = myTurn && ['playing', 'chooseTrump'].includes(g.phase) && acts.length > 0;
+    q('.my-area').classList.toggle('my-turn', myPlay);
+    st.classList.toggle('turn-pill', myTurn && acts.length > 0);
+    // a drawer covering the table: offer a quick way back when it's my move
+    for (const b of root.querySelectorAll('.drawer-turn')) b.hidden = !(myTurn && acts.length > 0);
   }
 
   // -------------------------------------------------------------- trick area
@@ -578,11 +623,13 @@ export function mountTable(root, ctx) {
           placeIn(seat, pos, wrap);
           flyFrom($('.fly', wrap), sourceRect(seat, card, pos, snap));
         }
+        wrap.classList.remove('leading');
         wrap.classList.toggle('winner', seat === lt.winner);
         els.push(wrap);
       }
       live.clear();
       for (const a of anchors) for (const w of [...a.children]) if (!els.includes(w)) w.remove();
+      celebrateTrick(lt, els);
       hold = { els, winner: lt.winner, timer: setTimeout(() => sweep(), HOLD_MS + (reducedMotion() ? 0 : 250)) };
     }
 
@@ -611,6 +658,54 @@ export function mountTable(root, ctx) {
       if (faceDown && seat === r.you.seat) wrap.classList.add('my-discard');
     }
     for (const [seat, wrap] of live) if (!present.has(seat)) { wrap.remove(); live.delete(seat); }
+    // live "currently winning" marker (only meaningful once 2+ cards are down)
+    const lead = cards.length > 1 ? winningSeat(g, cards) : null;
+    for (const [seat, wrap] of live) wrap.classList.toggle('leading', seat === lead);
+  }
+
+  /** Client-side mirror of engine trickWinnerIndex for the trick in progress (view lacks afterReveal/discard flags). */
+  function winningSeat(g, cards) {
+    const RANKS = 'J9ATKQ87';
+    const ri = (c) => RANKS.indexOf(rankOf(c));
+    const known = cards.filter((e) => e.card);
+    if (!known.length || !cards[0].card) return null;
+    const led = suitOf(cards[0].card);
+    const t = g.trump || {};
+    let best = null;
+    if (t.revealed && t.suit) {
+      // a trump-suit card has trump power if it was a non-following discard, or was played after the reveal
+      // (reveal happens on the revealer's own turn, so it precedes their card in this trick)
+      let revealAt = -1;
+      if (t.revealedInTrick != null && t.revealedInTrick < g.trick.index) revealAt = 0;
+      else if (t.revealedInTrick === g.trick.index) {
+        const k = cards.findIndex((e) => e.seat === t.revealedBy);
+        revealAt = k < 0 ? cards.length : k;
+      } else if (t.revealedInTrick == null) revealAt = 0;
+      cards.forEach((e, i) => {
+        if (!e.card || suitOf(e.card) !== t.suit) return;
+        const power = suitOf(e.card) !== led || (revealAt >= 0 && i >= revealAt);
+        if (power && (!best || ri(e.card) < ri(best.card))) best = e;
+      });
+      if (best) return best.seat;
+    }
+    for (const e of known) if (suitOf(e.card) === led && (!best || ri(e.card) < ri(best.card))) best = e;
+    return best?.seat ?? null;
+  }
+
+  /** Trick completed: glow the winning card, float "+N" from it and show a small pill by the winner's plate. */
+  function celebrateTrick(lt, els) {
+    const wrap = els.find((w) => Number(w.dataset.seat) === lt.winner);
+    if (lt.points && wrap) {
+      const f = h('span', { class: 'pts-float', 'aria-hidden': 'true' }, `+${lt.points}`);
+      wrap.append(f);
+      setTimeout(() => f.remove(), 1400);
+    }
+    const seatEl = seatEls[posOf(lt.winner, room.you.seat ?? 0)];
+    $('.trick-pill', seatEl)?.remove();
+    const who = lt.winner === room.you.seat ? 'You take it' : 'Takes the trick';
+    const pill = h('div', { class: 'trick-pill', role: 'status', html: `${who}${lt.points ? ` <b>+${lt.points}</b>` : ''}` });
+    seatEl.append(pill);
+    setTimeout(() => pill.remove(), 1900);
   }
 
   function sweep() {
@@ -695,6 +790,24 @@ export function mountTable(root, ctx) {
     return n * DEAL_STAGGER + DEAL_DUR * 0.8;
   }
 
+  function dealTotal(deal) {
+    return deal.counts.reduce((a, b) => a + b, 0) * DEAL_STAGGER + DEAL_DUR;
+  }
+  /** Keep my bidding panel out of the way until the deal animation has landed. */
+  let dealUntil = 0, dealTimer = 0;
+  function deferPanelForDeal() {
+    const left = dealUntil - performance.now();
+    clearTimeout(dealTimer);
+    if (left <= 0 || bidPanel.hidden) { delete bidPanel.dataset.deal; return; }
+    bidPanel.dataset.deal = '1';
+    dealTimer = setTimeout(() => {
+      delete bidPanel.dataset.deal;
+      if (bidPanelOpen()) { clearTimeout(announceTimer); q('.announce').innerHTML = ''; }
+    }, left);
+  }
+  // phones: the bidding bottom sheet's height positions the status/hint row just above it
+  new ResizeObserver(() => root.style.setProperty('--sheet-h', `${bidPanel.offsetHeight}px`)).observe(bidPanel);
+
   function runDeal(g, P, deal, snap) {
     const from = $('.plate', seatEls[P(g.dealer)]).getBoundingClientRect();
     const targets = deal.order.map((s) => {
@@ -706,27 +819,27 @@ export function mountTable(root, ctx) {
   }
 
   // -------------------------------------------------------------- announcements
+  const bidPanelOpen = () => !bidPanel.hidden && bidPanel.classList.contains('my-turn') && !bidPanel.dataset.deal;
   function announce(html, kind = '') {
+    if (bidPanelOpen()) return; // never cover my own bidding panel; the panel already shows round/min info
     const a = q('.announce');
-    a.innerHTML = `<div class="ann ${kind}">${html}</div>`;
+    const dur = kind === 'trump' ? 2800 : 2200;
+    a.innerHTML = `<div class="ann ${kind}" style="animation-duration:${dur}ms">${html}</div>`;
     clearTimeout(announceTimer);
-    announceTimer = setTimeout(() => (a.innerHTML = ''), 2200);
+    announceTimer = setTimeout(() => (a.innerHTML = ''), dur);
   }
 
   function announcements(r, p, g) {
     const nm = (seat) => `<span class="t${teamOf(seat)}-text">${esc(seatName(r, seat))}</span>`;
     if (p.handNumber !== g.handNumber) return announce(`Hand ${g.handNumber} · ${nm(g.dealer)} deals`);
     if (!p.trump?.revealed && g.trump?.revealed && g.trump.suit) {
-      pulse(q('.trump-badge'), 'glow');
-      return announce(`${suitIcon(g.trump.suit, 'xl')}<span>Trump revealed: <b>${SUIT_NAMES[g.trump.suit]}</b>${g.trump.revealedBy != null ? `<small>called by ${nm(g.trump.revealedBy)}</small>` : ''}</span>`, 'trump');
+      pulse(q('.trump-badge'), 'trump-pop');
+      return announce(`<span class="ann-suit">${suitIcon(g.trump.suit, 'xl')}</span><span>Trump revealed: <b>${SUIT_NAMES[g.trump.suit]}</b>${g.trump.revealedBy != null ? `<small>called by ${nm(g.trump.revealedBy)}</small>` : ''}</span>`, 'trump');
     }
     if (p.phase !== 'bidding2' && g.phase === 'bidding2') return announce('<b>Round 2</b><small>4 more cards · minimum bid 24</small>', 'round');
     if (p.phase !== 'playing' && g.phase === 'playing') return announce(`<b>Contract ${g.contract?.bid}</b><small>${nm(g.contract?.bidder)} bid \u00b7 ${nm(g.firstSeat)} leads</small>`);
     const lt = g.lastTrick;
-    if (lt && (p.lastTrick?.index !== lt.index || !p.lastTrick)) {
-      setTimeout(() => announce(`${nm(lt.winner)} takes the trick${lt.points ? ` <span class="gold">+${lt.points}</span>` : ''}`, 'trick'), reducedMotion() ? 0 : 350);
-      return;
-    }
+    if (lt && (p.lastTrick?.index !== lt.index || !p.lastTrick)) return; // shown as a pill by the winner's plate (celebrateTrick)
     if (isRedeal(p, g)) announce(p.phase === 'bidding1' ? '<b>Redeal</b><small>same dealer reshuffles</small>' : '<b>Redeal</b><small>a player held all four Jacks</small>');
   }
 

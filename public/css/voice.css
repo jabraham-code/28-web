@@ -42,5 +42,5 @@
 
 @media (max-width: 560px) {
   .voice-bar { gap: 4px; }
-  .voice-bar .icon-btn { width: 34px; height: 34px; }
+  .voice-bar .icon-btn { width: 36px; height: 36px; }
 }

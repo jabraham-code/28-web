@@ -69,8 +69,7 @@ function scenarioGame(dealer = 3) {
     act(game, 1, { type: 'bid', value: 14 });
     act(game, 2, { type: 'pass' });
     act(game, 3, { type: 'pass' });
-    act(game, 0, { type: 'bid', value: 15 });
-    for (const s of [1, 2, 3]) act(game, s, { type: 'pass' });
+    act(game, 0, { type: 'bid', value: 15 }); // dealer bids last; round over
   }
   assert.equal(game.phase, 'chooseTrump');
   act(game, 0, { type: 'chooseTrump', card: '7H' });
@@ -131,49 +130,77 @@ test('first bidder must bid; redeal only without point cards', () => {
   assert.deepEqual(g2.hands[0], ['7H', 'JS', '9S', 'AS']);
 });
 
-test('partner rule: >= 20 when partner holds bid and previous player passed', () => {
+test('partner rule: >= 18 when partner holds bid and the opponent between passed', () => {
   const game = createGame({ dealer: 3, decks: [SCENARIO], rng: mulberry32(4) });
   act(game, 0, { type: 'bid', value: 14 });
   act(game, 1, { type: 'pass' });
-  assert.equal(getView(game, 2).legal.minBid, 20);
-  reject(game, 2, { type: 'bid', value: 15 }, /at least 20/);
-  act(game, 2, { type: 'bid', value: 20 });
-  assert.equal(getView(game, 3).legal.minBid, 21);
-  act(game, 3, { type: 'pass' });
-  // seat 0: partner (2) holds the bid and seat 3 passed -> 20 floor, but 21 already needed
-  assert.equal(getView(game, 0).legal.minBid, 21);
+  assert.equal(getView(game, 2).legal.minBid, 18);
+  reject(game, 2, { type: 'bid', value: 15 }, /at least 18/);
+  act(game, 2, { type: 'bid', value: 18 });
+  assert.equal(getView(game, 3).legal.minBid, 19);
 
-  // previous player bid -> normal increment
+  // opponent in between raised -> partner only needs +1
   const g = createGame({ dealer: 3, decks: [SCENARIO], rng: mulberry32(4) });
   act(g, 0, { type: 'bid', value: 14 });
   act(g, 1, { type: 'bid', value: 15 });
   assert.equal(getView(g, 2).legal.minBid, 16);
   act(g, 2, { type: 'pass' });
-  // seat 3: partner (1) holds the bid, seat 2 passed -> 20
-  assert.equal(getView(g, 3).legal.minBid, 20);
+  // seat 3: partner (1) holds the bid, seat 2 passed -> 18
+  assert.equal(getView(g, 3).legal.minBid, 18);
 });
 
-test('3 passes in succession end round 1; passed player may bid again', () => {
+test('one bidding round per deal: each player gets exactly one turn', () => {
   const game = createGame({ dealer: 3, decks: [SCENARIO], rng: mulberry32(4) });
   act(game, 0, { type: 'bid', value: 14 });
   act(game, 1, { type: 'pass' });
   act(game, 2, { type: 'pass' });
-  act(game, 3, { type: 'bid', value: 15 });
-  act(game, 0, { type: 'pass' });
-  // seat 1 passed before and may bid again (partner 3 holds the bid and seat 0 passed -> >= 20)
-  assert.equal(getView(game, 1).legal.minBid, 20);
-  act(game, 1, { type: 'bid', value: 20 });
-  act(game, 2, { type: 'pass' });
-  act(game, 3, { type: 'pass' });
   assert.equal(game.phase, 'bidding1');
-  act(game, 0, { type: 'pass' });
+  act(game, 3, { type: 'bid', value: 15 });
+  // after the dealer's turn the round is over: seat 0 does not get another turn
   assert.equal(game.phase, 'chooseTrump');
-  assert.equal(currentTurn(game), 1);
-  assert.deepEqual(game.contract, { bid: 20, bidder: 1 });
-  const v = getView(game, 1);
+  assert.equal(currentTurn(game), 3);
+  assert.deepEqual(game.contract, { bid: 15, bidder: 3 });
+  const v = getView(game, 3);
   assert.deepEqual(v.legal.actions, ['chooseTrump']);
   assert.equal(v.legal.trumpChoices.length, 4);
-  reject(game, 1, { type: 'chooseTrump', card: 'JS' }, /do not hold/);
+  reject(game, 3, { type: 'chooseTrump', card: 'JS' }, /do not hold/);
+});
+
+test('bid may name the trump card; applied when that bid wins', () => {
+  const game = createGame({ dealer: 3, decks: [SCENARIO], rng: mulberry32(4) });
+  reject(game, 0, { type: 'bid', value: 14, trump: 'KD' }, /do not hold/);
+  act(game, 0, { type: 'bid', value: 14, trump: '7H' });
+  for (const v of [1, 2, 3, null]) assert.ok(!JSON.stringify(getView(game, v)).includes('7H') || v === 0, 'pick stays secret');
+  for (const s of [1, 2, 3]) act(game, s, { type: 'pass' });
+  // chooseTrump skipped: second deal done, round 2 bidding begins
+  assert.equal(game.phase, 'bidding2');
+  assert.equal(game.trump.card, '7H');
+  assert.equal(game.trump.suit, 'H');
+  assert.equal(game.hands[0].length, 7);
+  // contract holder cannot name a new trump card in round 2
+  reject(game, 0, { type: 'bid', value: 24, trump: game.hands[0][0] }, /already have/);
+  act(game, 0, { type: 'pass' });
+  const c1 = game.hands[1][0];
+  act(game, 1, { type: 'bid', value: 24, trump: c1 });
+  act(game, 2, { type: 'pass' });
+  act(game, 3, { type: 'pass' });
+  // seat 1 won round 2 with a named card: straight to play
+  assert.equal(game.phase, 'playing');
+  assert.deepEqual(game.contract, { bid: 24, bidder: 1 });
+  assert.equal(game.trump.card, c1);
+  assert.ok(game.hands[0].includes('7H'), 'old trump card returned');
+  assert.equal(game.hands[1].length, 7);
+});
+
+test('a losing bidder\'s named trump card is discarded', () => {
+  const game = createGame({ dealer: 3, decks: [SCENARIO], rng: mulberry32(4) });
+  act(game, 0, { type: 'bid', value: 14, trump: '7H' });
+  act(game, 1, { type: 'bid', value: 15 });
+  act(game, 2, { type: 'pass' });
+  act(game, 3, { type: 'pass' });
+  assert.equal(game.phase, 'chooseTrump');
+  assert.equal(currentTurn(game), 1);
+  assert.equal(game.trump.card, null);
 });
 
 test('round 2: all pass keeps contract; trump hidden from others', () => {
@@ -202,8 +229,7 @@ test('round 2: min 24, new bidder re-selects trump, old card returns', () => {
   act(game, 1, { type: 'bid', value: 24 });
   act(game, 2, { type: 'pass' });
   act(game, 3, { type: 'pass' });
-  act(game, 0, { type: 'pass' });
-  assert.equal(game.phase, 'chooseTrump');
+  assert.equal(game.phase, 'chooseTrump', 'round 2 ends after four turns');
   assert.equal(currentTurn(game), 1);
   assert.ok(game.hands[0].includes('7H'));
   assert.equal(game.hands[0].length, 8);
@@ -323,6 +349,32 @@ test('discards are visible to everyone immediately (face-up house rule)', () => 
   assert.equal(getView(game, 1).lastTrick.cards[2].card, '7S');
 });
 
+test('bidder may reveal trump and then choose which trump to play', () => {
+  const game = scenarioGame(0); // first seat 1, bidder 0, trump H (7H concealed)
+  act(game, 1, { type: 'play', card: 'JD' });
+  act(game, 2, { type: 'play', card: '7D' });
+  act(game, 3, { type: 'play', card: '7S' });
+  const v = getView(game, 0);
+  assert.ok(v.legal.actions.includes('revealTrump'));
+  const handBefore = game.hands[0].length;
+  act(game, 0, { type: 'revealTrump' });
+  assert.equal(game.trump.revealed, true);
+  assert.equal(game.trump.concealed, false);
+  assert.equal(game.hands[0].length, handBefore + 1, 'concealed card back in hand');
+  assert.ok(game.hands[0].includes('7H'));
+  assert.equal(currentTurn(game), 0, 'still my turn');
+  const v2 = getView(game, 0);
+  assert.equal(v2.mustPlayTrump, 0);
+  assert.ok(!v2.legal.actions.includes('revealTrump') && !v2.legal.actions.includes('playTrumpCard'));
+  assert.ok(v2.legal.playable.length >= 1 && v2.legal.playable.every((c) => c[1] === 'H'), 'only trumps playable');
+  reject(game, 0, { type: 'play', card: game.hands[0].find((c) => c[1] !== 'H') }, /must now play a trump/);
+  const pick = v2.legal.playable.find((c) => c !== '7H') || '7H';
+  act(game, 0, { type: 'play', card: pick });
+  assert.equal(game.lastTrick.winner, 0, 'chosen trump wins the trick');
+  // revealTrump is not available to non-bidders or when leading with other cards
+  assert.ok(!getView(game, 0).legal.actions.includes('revealTrump'));
+});
+
 test('trump led by another: bidder follows from hand or may playTrumpCard', () => {
   const game = scenarioGame(0);
   // manipulate: seat 1 leads 9H
@@ -416,8 +468,8 @@ test('hand end scoring, match end, dealer rotation', () => {
   const r = game.handResult;
   assert.equal(r.teamPoints[0] + r.teamPoints[1], 28);
   assert.equal(r.made, r.teamPoints[0] >= 14);
-  assert.deepEqual(r.delta, [r.made ? 1 : -2, 0]);
-  assert.deepEqual(game.scores, r.delta);
+  assert.deepEqual(r.delta, r.made ? [1, -1] : [-2, 2], 'points are exchanged');
+  assert.deepEqual(game.scores, [5 + r.delta[0], 5 + r.delta[1]], 'both teams start with 5');
   for (const s of [0, 1, 2, 3]) assert.deepEqual(getView(game, s).legal.actions, ['nextHand']);
   assert.deepEqual(getView(game, null).legal.actions, []);
   reject(game, 1, { type: 'pass' });
@@ -427,28 +479,34 @@ test('hand end scoring, match end, dealer rotation', () => {
   assert.equal(game.handNumber, 2);
   assert.equal(game.phase, 'bidding1');
 
-  // match end at +target
+  // a team that drops below zero loses (either side)
   const g = scenarioGame();
-  g.scores = [5, 0];
-  g.hands = g.hands; // play out
+  g.scores = [9, 0];
   playOutHand(g);
   if (g.handResult.made) {
+    assert.deepEqual(g.scores, [10, -1]);
     assert.equal(g.phase, 'matchEnd');
     assert.equal(g.matchWinner, 0);
+    reject(g, 0, { type: 'nextHand' }, /over/);
   } else {
+    assert.deepEqual(g.scores, [7, 2]);
     assert.equal(g.phase, 'handEnd');
   }
-  // match end at -target
   const g2 = scenarioGame();
-  g2.scores = [-4, 0];
+  g2.scores = [1, 9];
   playOutHand(g2);
   if (!g2.handResult.made) {
+    assert.deepEqual(g2.scores, [-1, 11]);
     assert.equal(g2.phase, 'matchEnd');
     assert.equal(g2.matchWinner, 1);
-    reject(g2, 0, { type: 'nextHand' }, /over/);
   } else {
-    assert.deepEqual(g2.scores, [-3, 0]);
+    assert.deepEqual(g2.scores, [2, 8]);
+    assert.equal(g2.phase, 'handEnd', 'reaching zero is not losing');
   }
+  const g3 = scenarioGame();
+  g3.scores = [5, 1];
+  playOutHand(g3);
+  if (g3.handResult.made) { assert.deepEqual(g3.scores, [6, 0]); assert.equal(g3.phase, 'handEnd', 'exactly zero is still alive'); }
 });
 
 // ---------------------------------------------------------------------------
@@ -508,7 +566,7 @@ test('fuzz: 500 bot matches keep invariants', () => {
         assert.equal(game.tricksWon.reduce((a, b) => a + b, 0), 8);
         assert.equal(game.captured.length, 32);
         assert.equal(r.delta[r.biddingTeam], scoreDelta(r.bid, r.made));
-        assert.equal(r.delta[1 - r.biddingTeam], 0);
+        assert.equal(r.delta[1 - r.biddingTeam], -r.delta[r.biddingTeam]);
         hands++;
         seat = Math.floor(rng() * 4);
       }
@@ -537,7 +595,8 @@ test('fuzz: 500 bot matches keep invariants', () => {
         const r2 = game.handResult;
         assert.equal(r2.teamPoints[0] + r2.teamPoints[1], 28);
         const w = game.matchWinner;
-        assert.ok(game.scores[w] >= game.targetScore || game.scores[1 - w] <= -game.targetScore);
+        assert.ok(game.scores[1 - w] < 0 && game.scores[w] >= 0, 'loser dropped below zero');
+        assert.equal(game.scores[0] + game.scores[1], 2 * game.targetScore, 'points are only exchanged');
         hands++;
       }
       assert.equal(game.dealer, prevDealer, 'dealer only rotates on nextHand');

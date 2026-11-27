@@ -9,11 +9,12 @@ Rules follow the main game on [pagat.com/jass/28](https://www.pagat.com/jass/28.
 - **Rooms:** 4-letter room codes and share links. Players pick their seats, others can watch as spectators, and the host controls the room.
 - **Full 28 rules:**
   - compulsory first bid, with a redeal allowed if that bidder holds no point cards;
-  - a bid of at least 20 to overcall your partner;
-  - a second bidding round with a minimum of 24;
+  - one bidding round after each deal (every player bids or passes once), with an optional trump card picked together with the bid;
+  - a bid of at least 18 to overcall your partner unless the opponent in between raised;
+  - a second bidding round after the second deal, with a minimum of 24;
   - a concealed trump card, calling for trump, and the bidder's restrictions while trump is hidden;
   - automatic redeal when one hand holds all four Jacks;
-  - match scoring of +1/−2, +2/−3 and +3/−4 depending on the bid.
+  - match scoring: both teams start with 5 points and exchange +1/−2, +2/−3 or +3/−4 per hand depending on the bid; a team that drops below zero loses.
 - **Bots:** the host can add a bot to any empty seat or fill all of them at once. A bot also plays for anyone disconnected for 60 s and hands the seat back when they return.
 - **Claude AI bots** (optional): Claude makes the bots' decisions when `ANTHROPIC_API_KEY` is set, using Haiku by default. If a call fails, the classic bot moves instead. Bots start as Classic; the host can switch to Claude bots in the lobby or during the game.
 - **Voice chat:** players talk to each other directly over WebRTC. There is mute, per-person silence, and a talking indicator on each seat.

@@ -31,7 +31,7 @@ test('settings: turn timer and hints validate and appear in the room view', () =
   assert.equal(m.handle(host, 'room:settings', { turnTimer: 17 }).ok, false);
   assert.equal(m.handle(host, 'room:settings', { hints: 'yes' }).ok, false);
   assert.equal(m.handle(host, 'room:settings', { turnTimer: 17, targetScore: 8 }).ok, false);
-  assert.equal(host.last().settings.targetScore, 6, 'invalid combo applies nothing');
+  assert.equal(host.last().settings.targetScore, 5, 'invalid combo applies nothing');
 });
 
 test('turn timer auto-plays for an idle human and posts a notice', async () => {

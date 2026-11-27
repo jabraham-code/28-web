@@ -3,7 +3,7 @@ import { h, $, esc, initials, teamOf, botBadge, SPARKLE } from './util.js';
 import { mountChat } from './chat.js';
 import { toast } from './toast.js';
 
-const TARGETS = [4, 6, 8, 10, 12];
+const TARGETS = [3, 5, 7, 10];
 
 export function mountLobby(root, ctx) {
   root.innerHTML = `
@@ -37,9 +37,13 @@ export function mountLobby(root, ctx) {
         </div>
         <div class="lobby-controls">
           <div class="setting">
-            <span class="eyebrow" id="target-label">Target score</span>
-            <div class="segmented" role="radiogroup" aria-labelledby="target-label">
+            <span class="eyebrow" id="target-label">Starting points</span>
+            <div class="segmented" role="radiogroup" aria-labelledby="target-label" aria-describedby="target-hint">
               ${TARGETS.map((t) => `<button type="button" role="radio" class="seg" data-target="${t}">${t}</button>`).join('')}
+            </div>
+            <div class="sp-explain">
+              <div class="sp-mini" aria-hidden="true"><b class="t0-text sp-n"></b><span class="sp-bar"><i class="t0"></i><i class="t1"></i></span><b class="t1-text sp-n"></b></div>
+              <p class="sp-hint muted" id="target-hint"></p>
             </div>
           </div>
           <div class="setting brain-setting">
@@ -63,8 +67,10 @@ export function mountLobby(root, ctx) {
               <button type="button" role="radio" class="seg" data-hints="off">Off</button>
             </div>
           </div>
+        </div>
+        <div class="lobby-cta">
           <div class="lobby-buttons">
-            <button class="btn btn-outline-gold" type="button" data-act="fill"><svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><rect x="5" y="8" width="14" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="9.5" cy="13.5" r="1.5" fill="currentColor"/><circle cx="14.5" cy="13.5" r="1.5" fill="currentColor"/><path d="M12 4v4" stroke="currentColor" stroke-width="2"/></svg><span>Fill empty seats with bots</span></button>
+            <button class="btn btn-outline-gold" type="button" data-act="fill"><svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><rect x="5" y="8" width="14" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="9.5" cy="13.5" r="1.5" fill="currentColor"/><circle cx="14.5" cy="13.5" r="1.5" fill="currentColor"/><path d="M12 4v4" stroke="currentColor" stroke-width="2"/></svg><span class="lbl-long">Fill empty seats with bots</span><span class="lbl-short">Fill with bots</span></button>
             <button class="btn btn-gold btn-lg" type="button" data-act="start">Start game</button>
           </div>
           <p class="start-hint muted" aria-live="polite"></p>
@@ -201,6 +207,11 @@ export function mountLobby(root, ctx) {
       b.setAttribute('aria-checked', String(on));
       b.disabled = !host;
     });
+    const sp = r.settings.targetScore;
+    root.querySelectorAll('.sp-n').forEach((n) => (n.textContent = sp));
+    root.querySelector('.sp-bar').style.setProperty('--n', sp * 2);
+    $('.sp-hint', root).textContent = `Both teams start with ${sp}. Points move between teams after every hand \u2014 drop below 0 and you lose.`;
+    root.querySelector('.lobby-main').classList.toggle('is-host', host);
     const avail = !!r.settings.claudeAvailable;
     const brain = r.settings.botBrain || 'classic';
     const brainSet = $('.brain-setting', root);

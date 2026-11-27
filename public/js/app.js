@@ -74,6 +74,7 @@ function show(name) {
   current = name;
   for (const [k, el] of Object.entries(screens)) el.hidden = k !== name;
   document.body.dataset.screen = name;
+  window.scrollTo(0, 0); // don't carry the previous screen's scroll (e.g. landing on a short landscape phone)
   if (name === 'game' && table.chatVisible()) markRead();
 }
 
