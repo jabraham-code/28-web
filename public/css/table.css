@@ -566,8 +566,13 @@
 .hc-flag.bad { color: #2b0c0c; background: var(--bad); }
 .hc-trick { color: var(--ink-3); font-weight: 600; flex: none; }
 .hc-need.hc-short { display: none; }
+.hand-card .hc-end { flex: none; height: 24px; padding: 0 10px; font-size: .74rem; margin-left: auto; animation: pop .3s var(--ease); }
+@media (pointer: coarse) { .hand-card .hc-end { height: 26px; } }
 /* the per-team card-point line under the match score is redundant with the card */
 #screen-game.has-hand-card .hud-scores .tug-pts { display: none !important; }
+@media (max-width: 560px) {
+  .hand-card.made .hc-flag, .hand-card.beaten .hc-flag { padding: 1px 6px; font-size: .66rem; }
+}
 @media (max-width: 860px) {
   .hud .hand-card { gap: 8px; padding: 0 10px; font-size: .72rem; }
   .hc-trick { display: none; }

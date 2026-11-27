@@ -42,7 +42,7 @@ Do not edit files you don't own. If a contract seems wrong, follow it anyway and
 - `firstSeat` leads trick 1; trick winner leads next. Must follow suit if able.
 - **Phase one (trump concealed):**
   - A player (not bidder) unable to follow may either play any card (a discard — played face up, house rule; it does not reveal trump) or first take action `callTrump`: concealed card is revealed and moved into bidder's hand; trump is now revealed; the caller must then play a trump if they have one, otherwise any card.
-  - Bidder unable to follow a non-trump lead: may discard any **non-trump** card from hand, or `playTrumpCard` (reveal and play the concealed card, trump becomes revealed), or `revealTrump` (reveal; the concealed card returns to their hand and they must then play a trump of their choice — any trump-suit card, with trump power). Bidder may NOT play a trump-suit card from hand in this case. (If bidder's hand has only trump-suit cards, they may play one from hand as a plain discard.)
+  - Bidder unable to follow a non-trump lead: may discard any **non-trump** card from hand, or `playTrumpCard` (reveal and play the concealed card, trump becomes revealed), or `revealTrump` (reveal; the concealed card returns to their hand and they must then play a trump of their choice — any trump-suit card, with trump power). Bidder may NOT play a trump-suit card from hand in this case — **unless another player has already played a trump-suit card in this trick**, in which case the bidder may play a trump from hand without revealing (it is a discard: it gains trump power only if trump is revealed later in the same trick). (If bidder's hand has only trump-suit cards, they may play one from hand as a plain discard.)
   - Bidder leading: may not lead a trump-suit card unless hand holds only trump-suit cards (then it is led with no trump power, trump stays concealed). If bidder's hand is empty (trick 8, concealed card unplayed), bidder must `playTrumpCard`.
   - When trump suit is led by someone else, bidder follows from hand if possible; if bidder has no trump-suit cards in hand they may play anything; they may also `playTrumpCard` or `revealTrump`.
   - Trick winner in phase one: highest card of suit led.
@@ -78,6 +78,7 @@ export function currentTurn(game)                // -> seat whose action is awai
 { type: "play", card }            // card from own hand
 { type: "callTrump" }             // non-bidder, cannot follow, trump concealed
 { type: "playTrumpCard" }         // bidder plays concealed card
+{ type: "endHand" }               // any seated player, during play, once the result is decided (GameView.canEndHand): scores the hand now
 { type: "revealTrump" }           // bidder reveals trump (card back to hand), then must play a trump of their choice
 { type: "nextHand" }              // phase handEnd
 ```

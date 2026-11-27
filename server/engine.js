@@ -171,8 +171,11 @@ function playError(game, seat, card) {
   if (canFollow) {
     return suit === led ? null : 'You must follow suit';
   }
+  // Exception: once another player has already put a trump-suit card into this
+  // trick, the bidder may also play a trump from hand without revealing.
+  const othersPlayedTrump = game.trick.cards.some((e) => e.seat !== seat && e.card && suitOf(e.card) === trump.suit);
   if (isBidder && trumpConcealed(game) && led !== trump.suit && suit === trump.suit &&
-      hand.some((c) => suitOf(c) !== trump.suit)) {
+      hand.some((c) => suitOf(c) !== trump.suit) && !othersPlayedTrump) {
     return 'While trump is concealed the bidder may not trump from hand: discard a non-trump or play the concealed trump card';
   }
   return null;
@@ -273,6 +276,7 @@ function dispatch(game, seat, action) {
     return null;
   }
   if (game.phase === 'handEnd') return 'The hand is over; waiting for next hand';
+  if (action.type === 'endHand') return doEndHand(game, seat); // any seated player, not turn-bound
   if (game.turn !== seat) return 'Not your turn';
   switch (action.type) {
     case 'bid': return doBid(game, seat, action.value, action.trump);
@@ -521,6 +525,28 @@ function advance(game, seat) {
   game.turn = winner;
 }
 
+/**
+ * 'made' when the bidding team already has the contract, 'beaten' when the
+ * defenders hold enough points that it can no longer be made, else null.
+ */
+export function handDecided(game) {
+  if (game.phase !== 'playing' || !game.contract) return null;
+  const bt = teamOf(game.contract.bidder);
+  if (game.teamPoints[bt] >= game.contract.bid) return 'made';
+  if (game.teamPoints[1 - bt] > 28 - game.contract.bid) return 'beaten';
+  return null;
+}
+
+/** Finish the hand early once its result can no longer change. */
+function doEndHand(game, seat) {
+  const d = handDecided(game);
+  if (!d) return game.phase === 'playing' ? 'The contract is not decided yet' : 'Not in play';
+  log(game, `Seat ${seat} ended the hand early (contract ${d})`);
+  game.endedEarly = true;
+  scoreHand(game);
+  return null;
+}
+
 export function scoreDelta(bid, made) {
   if (bid <= 19) return made ? 1 : -2;
   if (bid <= 24) return made ? 2 : -3;
@@ -536,7 +562,8 @@ function scoreHand(game) {
   delta[1 - bt] = -delta[bt]; // points are exchanged between the teams
   game.scores[0] += delta[0];
   game.scores[1] += delta[1];
-  game.handResult = { bid, bidder, biddingTeam: bt, teamPoints: [...game.teamPoints], made, delta };
+  game.handResult = { bid, bidder, biddingTeam: bt, teamPoints: [...game.teamPoints], made, delta, endedEarly: !!game.endedEarly };
+  game.endedEarly = false;
   log(game, `Team ${bt} ${made ? 'made' : 'failed'} ${bid} with ${game.teamPoints[bt]} points (${delta[bt] > 0 ? '+' : ''}${delta[bt]})`);
   if (game.scores[0] < 0) game.matchWinner = 1;
   else if (game.scores[1] < 0) game.matchWinner = 0;
@@ -575,6 +602,8 @@ export function getView(game, seat) {
       history: game.bidding.history.map((h) => ({ ...h })),
     },
     mustPlayTrump: game.mustPlayTrump,
+    decided: handDecided(game),
+    canEndHand: me !== null && handDecided(game) !== null,
     contract: game.contract ? { ...game.contract } : null,
     trump: {
       concealed: t.concealed,

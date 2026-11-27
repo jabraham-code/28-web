@@ -80,7 +80,7 @@ export function showRules() {
     <section>
       <h3>Playing</h3>
       <p>8 tricks. Follow suit if you can. While trump is hidden, a player who can&rsquo;t follow may discard any card (face up), or <b>call trump</b>: the hidden card is revealed and must then be followed with a trump if possible.</p>
-      <p>The bidder can&rsquo;t ruff from hand while trump is hidden &mdash; instead they may <b>reveal trump</b> &mdash; the hidden card goes back into their hand and they choose which trump to play &mdash; or play the concealed card itself. Once trump is revealed, normal trick-taking with trumps applies.</p>
+      <p>The bidder can&rsquo;t ruff from hand while trump is hidden &mdash; instead they may <b>reveal trump</b> &mdash; the hidden card goes back into their hand and they choose which trump to play &mdash; or play the concealed card itself. If someone else has already played a trump-suit card in the trick, the bidder may also play a trump from hand without revealing. Once trump is revealed, normal trick-taking with trumps applies.</p>
     </section>
     <section>
       <h3>Scoring</h3>
@@ -111,7 +111,7 @@ function handSummary(room, r, scoresAfter, { trump } = {}) {
   const bt = r.biddingTeam ?? teamOf(r.bidder);
   const L = leftTeamOf(room);
   const before = [scoresAfter[0] - (r.delta[0] || 0), scoresAfter[1] - (r.delta[1] || 0)];
-  const fact = `${esc(seatName(room, r.bidder))} bid <b>${r.bid}</b> · took <b>${r.teamPoints[bt]}</b>${trump ? `<span class="he-dot"> · </span><span class="he-trump">${suitIcon(trump)} ${SUIT_NAMES[trump]} trump</span>` : ''}`;
+  const fact = `${esc(seatName(room, r.bidder))} bid <b>${r.bid}</b> · took <b>${r.teamPoints[bt]}</b>${trump ? `<span class="he-dot"> · </span><span class="he-trump">${suitIcon(trump)} ${SUIT_NAMES[trump]} trump</span>` : ''}${r.endedEarly ? '<span class="muted he-early"> · ended early</span>' : ''}`;
   const row = (t) => {
     const d = r.delta[t] || 0;
     return `

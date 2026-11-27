@@ -136,6 +136,7 @@ export function mountTable(root, ctx) {
     else if (act === 'callTrump') doAct({ type: 'callTrump' });
     else if (act === 'playTrumpCard') doAct({ type: 'playTrumpCard' });
     else if (act === 'revealTrump') doAct({ type: 'revealTrump' });
+    else if (act === 'endHand') doAct({ type: 'endHand' });
   });
   root.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
@@ -398,7 +399,8 @@ export function mountTable(root, ctx) {
       </span>
       <span class="hc-side hc-right t${dt}"><b>${defPts}</b><span class="hc-name">${esc(name(dt))}</span></span>
       ${status}
-      <span class="hc-trick">Trick ${Math.min(8, done + (g.phase === 'playing' ? 1 : 0))}/8</span>`;
+      <span class="hc-trick">Trick ${Math.min(8, done + (g.phase === 'playing' ? 1 : 0))}/8</span>
+      ${g.canEndHand ? `<button class="btn btn-gold btn-xs hc-end" type="button" data-act="endHand" title="The result can no longer change — score this hand now">End hand</button>` : ''}`;
     if (el.dataset.html === html) return;
     const changed = el.dataset.html && prev;
     el.dataset.html = html;

@@ -372,6 +372,21 @@ test('discards are visible to everyone immediately (face-up house rule)', () => 
   assert.equal(getView(game, 1).lastTrick.cards[2].card, '7S');
 });
 
+test('bidder may play a trump from hand without revealing once another player played trump', () => {
+  const game = scenarioGame(0); // first seat 1, bidder 0, trump H concealed (7H)
+  const trumpInHand = game.hands[0].find((c) => c[1] === 'H');
+  assert.ok(trumpInHand, 'scenario: bidder holds a heart');
+  act(game, 1, { type: 'play', card: 'JD' });
+  act(game, 2, { type: 'play', card: '7D' });
+  // normally the bidder (void in D) may not trump from hand
+  game.trick.cards.push({ seat: 3, card: 'QH', faceDown: false, discard: true, afterReveal: false }); // seat 3 discarded a heart
+  game.turn = 0;
+  const v = getView(game, 0);
+  assert.ok(v.legal.playable.includes(trumpInHand), 'trump from hand allowed after another player played trump');
+  act(game, 0, { type: 'play', card: trumpInHand });
+  assert.equal(game.trump.revealed, false, 'trump stays hidden');
+});
+
 test('bidder may reveal trump and then choose which trump to play', () => {
   const game = scenarioGame(0); // first seat 1, bidder 0, trump H (7H concealed)
   act(game, 1, { type: 'play', card: 'JD' });
@@ -570,6 +585,34 @@ function checkCards(game) {
   assert.equal(all.length, 32, `card count in phase ${game.phase}`);
   assert.equal(new Set(all).size, 32, 'no duplicated cards');
 }
+
+test('endHand: any seat can end the hand once the contract is decided', () => {
+  const game = scenarioGame(); // bidder seat 0, contract 14
+  reject(game, 2, { type: 'endHand' }, /not decided/);
+  assert.equal(getView(game, 1).canEndHand, false);
+  // simulate the bidding team already holding the contract
+  game.teamPoints = [14, 3];
+  assert.equal(getView(game, 0).decided, 'made');
+  assert.equal(getView(game, 3).canEndHand, true, 'not turn-bound');
+  assert.equal(getView(game, null).canEndHand, false, 'spectators cannot');
+  const before = [...game.scores];
+  act(game, 3, { type: 'endHand' });
+  assert.equal(game.phase, 'handEnd');
+  assert.equal(game.handResult.made, true);
+  assert.equal(game.handResult.endedEarly, true);
+  assert.deepEqual(game.scores, [before[0] + 1, before[1] - 1]);
+  act(game, 0, { type: 'nextHand' });
+  assert.equal(game.phase, 'bidding1');
+
+  // defenders past 28 - bid: beaten
+  const g2 = scenarioGame();
+  g2.teamPoints = [5, 15];
+  assert.equal(getView(g2, 0).decided, 'beaten');
+  act(g2, 0, { type: 'endHand' });
+  assert.equal(g2.handResult.made, false);
+  assert.deepEqual(g2.handResult.delta, [-2, 2]);
+  g2.teamPoints = [0, 0];
+});
 
 test('fuzz: 500 bot matches keep invariants', () => {
   const rng = mulberry32(12345);

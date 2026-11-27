@@ -303,6 +303,10 @@ export class RoomManager {
     if ('card' in action) clean.card = action.card;
     if ('trump' in action) clean.trump = action.trump;
     const res = this._apply(room, player.seat, clean);
+    if (res.ok && clean.type === 'endHand') {
+      const r = room.game.handResult;
+      this._systemChat(room, `${player.name} ended the hand — contract ${r?.made ? 'made' : 'beaten'}`);
+    }
     return res.ok ? ok() : fail(res.error || 'Illegal action');
   }
 
